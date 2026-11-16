@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db.js'
-import { Campo, Modal, Avisos, useConfig } from '../components/ui.jsx'
+import { Campo, Modal, Avisos, SelectorPago, useConfig } from '../components/ui.jsx'
 import { costoHoraActivo, depreciacionMensual, depreciacionAcumulada, n } from '../lib/calc.js'
 import { usd, fecha } from '../lib/format.js'
 
@@ -91,6 +91,7 @@ function ActivoForm({ inicial, config, onCerrar }) {
         <Campo label="Vida útil (meses)" tipo="number" valor={a.vidaUtilMeses} onCambio={(v) => set('vidaUtilMeses', v)} ayuda="Cuánto tiempo esperas usarla." />
         <Campo label="Valor residual ($)" tipo="number" valor={a.valorResidual} onCambio={(v) => set('valorResidual', v)} ayuda="Lo que valdría al final (puede ser 0)." />
       </div>
+      <SelectorPago valor={a.pagadoCon ?? ''} onCambio={(v) => set('pagadoCon', v || null)} metodos={config.metodosPago || []} />
       <div className="subtabla">
         <h4>Para calcular el costo por hora</h4>
         <div className="fila">

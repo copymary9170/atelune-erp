@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, registrarMovimiento, TIPOS_PRODUCTO, UNIDADES } from '../db.js'
-import { Campo, Modal, Selector, useConfig } from '../components/ui.jsx'
+import { Campo, Modal, Selector, SelectorPago, useConfig } from '../components/ui.jsx'
 import { n } from '../lib/calc.js'
 import { usd, num, fecha, hoy } from '../lib/format.js'
 
@@ -180,6 +180,8 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
   const [referencia, setReferencia] = useState('')
   const [nota, setNota] = useState('')
   const [proveedorId, setProveedorId] = useState('')
+  const [pagadoCon, setPagadoCon] = useState('')
+  const config = useConfig()
   const proveedores = useLiveQuery(() => db.proveedores.orderBy('nombre').toArray(), [], [])
   const factor = n(p.factor) || 1
   const cantUso = tipo === 'entrada' && unidad === 'compra' ? n(cantidad) * factor : n(cantidad)
@@ -193,6 +195,7 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
       costoUnitario: tipo === 'entrada' ? n(costoTotal) / cantUso : undefined,
       fecha: f, referencia, nota,
       proveedorId: tipo === 'entrada' && proveedorId ? Number(proveedorId) : null,
+      pagadoCon: tipo === 'entrada' ? pagadoCon || null : null,
     })
     onCerrar()
   }
@@ -219,6 +222,7 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
         <Selector label="Proveedor" valor={proveedorId} onCambio={setProveedorId} vacio={proveedores.length ? 'Sin proveedor' : 'Aún no hay proveedores registrados'}
           opciones={proveedores.map((x) => ({ value: x.id, label: x.nombre }))} />
       )}
+      {tipo === 'entrada' && <SelectorPago valor={pagadoCon} onCambio={setPagadoCon} metodos={config.metodosPago || []} />}
       <Campo label="Referencia" valor={referencia} onCambio={setReferencia} placeholder="N.º de factura, nota de entrega…" />
       <Campo label="Nota" valor={nota} onCambio={setNota} />
       <div className="modal-pie">

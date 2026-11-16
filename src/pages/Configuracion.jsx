@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { db, exportarRespaldo, importarRespaldo } from '../db.js'
 import { Campo, useConfig } from '../components/ui.jsx'
 import { totalCostosFijos, fijosPorPedido } from '../lib/calc.js'
+import { CATEGORIAS_GASTO } from '../lib/contabilidad.js'
 import { usd, fecha } from '../lib/format.js'
 
 export default function Configuracion() {
@@ -129,6 +130,18 @@ export default function Configuracion() {
           ))}
           <button className="sec" onClick={() => agregar('metodosPago', { nombre: '', comisionPct: null })}>+ Agregar método</button>
         </div>
+      </div>
+
+      <div className="tarjeta">
+        <h2>Categorías de gasto</h2>
+        <p className="muted">Cada categoría es una cuenta de gasto en la contabilidad. Si cambias un nombre, los gastos ya registrados conservan el anterior.</p>
+        {(c.categoriasGasto ?? CATEGORIAS_GASTO).map((cat, i) => (
+          <div className="fila" key={i}>
+            <Campo valor={cat} onCambio={(v) => set('categoriasGasto', (c.categoriasGasto ?? CATEGORIAS_GASTO).map((x, j) => (j === i ? v : x)))} />
+            <div className="campo auto"><button className="peligro mini" onClick={() => set('categoriasGasto', (c.categoriasGasto ?? CATEGORIAS_GASTO).filter((_, j) => j !== i))}>×</button></div>
+          </div>
+        ))}
+        <button className="sec" onClick={() => set('categoriasGasto', [...(c.categoriasGasto ?? CATEGORIAS_GASTO), ''])}>+ Agregar categoría</button>
       </div>
 
       <div className="tarjeta">

@@ -24,6 +24,12 @@ db.version(2).stores({
   movimientos: '++id, productoId, fecha, tipo, pedidoId, proveedorId',
 })
 
+// Etapa 3: gastos y contabilidad.
+db.version(3).stores({
+  gastos: '++id, fecha, tipo, categoria, proveedorId',
+  asientosManuales: '++id, fecha',
+})
+
 export const TIPOS_PRODUCTO = {
   reventa: 'Producto de reventa',
   materia_prima: 'Materia prima',
@@ -88,7 +94,7 @@ export async function tasaVigente() {
 
 // ---------- Inventario ----------
 
-export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId }) {
+export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon }) {
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     const p = await db.productos.get(productoId)
     if (!p) throw new Error('Producto no encontrado')
@@ -104,6 +110,7 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
       nota: nota || '',
       pedidoId: pedidoId ?? null,
       proveedorId: proveedorId ?? null,
+      pagadoCon: pagadoCon ?? null,
       stockResultante: r.stock,
       costoPromedioResultante: r.costoPromedio,
     })
@@ -111,7 +118,7 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
 }
 
 // ---------- Respaldo ----------
-const TABLAS = ['config', 'productos', 'movimientos', 'activos', 'tasas', 'plantillas', 'cotizaciones', 'clientes', 'proveedores', 'pedidos']
+const TABLAS = ['config', 'productos', 'movimientos', 'activos', 'tasas', 'plantillas', 'cotizaciones', 'clientes', 'proveedores', 'pedidos', 'gastos', 'asientosManuales']
 
 export async function exportarRespaldo() {
   const datos = { app: 'atelune-erp', version: 1, fecha: new Date().toISOString() }
@@ -171,6 +178,10 @@ export async function crearPedidoDesdeCotizacion(cotId) {
       items: structuredClone(cot.items),
       precios: calc.renglones.map((r) => ({ precio: r.precio, precioUnitario: r.precioUnitario, costo: r.costo })),
       total: calc.total,
+      subtotal: calc.subtotal,
+      envio: calc.envio,
+      comision: calc.comision,
+      iva: calc.iva,
       costoTotal: calc.costoTotal,
       ganancia: calc.ganancia,
       tasa: cot.tasa,
@@ -215,4 +226,13 @@ export async function cambiarEstadoPedido(id, estado) {
       historial: [...(p.historial || []), { fecha: new Date().toISOString(), estado }],
     })
   })
+}
+
+// ---------- Contabilidad ----------
+export async function datosContables() {
+  const [pedidos, movimientos, gastos, activos, manuales, productos, config] = await Promise.all([
+    db.pedidos.toArray(), db.movimientos.toArray(), db.gastos.toArray(), db.activos.toArray(),
+    db.asientosManuales.toArray(), db.productos.toArray(), getConfig(),
+  ])
+  return { pedidos, movimientos, gastos, activos, manuales, productos, config }
 }

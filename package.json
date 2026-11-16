@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node --test tests/calc.test.js"
+    "test": "node --test tests/calc.test.js tests/contabilidad.test.js"
   },
   "dependencies": {
     "dexie": "^4.4.7",

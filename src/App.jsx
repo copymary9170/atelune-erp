@@ -12,6 +12,8 @@ import Tasas from './pages/Tasas.jsx'
 import Configuracion from './pages/Configuracion.jsx'
 import Pedidos, { PedidoDetalle } from './pages/Pedidos.jsx'
 import Contactos from './pages/Contactos.jsx'
+import Gastos from './pages/Gastos.jsx'
+import Contabilidad from './pages/Contabilidad.jsx'
 
 const MENU = [
   { to: '/', label: 'Inicio', end: true },
@@ -24,12 +26,15 @@ const MENU = [
   { to: '/inventario', label: 'Inventario' },
   { to: '/activos', label: 'Activos y máquinas' },
   { to: '/proveedores', label: 'Proveedores' },
+  { seccion: 'Finanzas' },
+  { to: '/gastos', label: 'Gastos y pagos' },
+  { to: '/contabilidad', label: 'Contabilidad' },
   { seccion: 'Ajustes' },
   { to: '/tasas', label: 'Tasa de cambio' },
   { to: '/configuracion', label: 'Configuración y respaldo' },
 ]
 
-const PROXIMAMENTE = ['Gastos', 'Libro diario y mayor', 'Estados financieros', 'Reportes']
+const PROXIMAMENTE = ['Reportes', 'Datos en la nube']
 
 export default function App() {
   const [abierto, setAbierto] = useState(false)
@@ -78,6 +83,8 @@ export default function App() {
           <Route path="/pedidos/:id" element={<PedidoDetalle />} />
           <Route path="/clientes" element={<Contactos tipo="clientes" key="clientes" />} />
           <Route path="/proveedores" element={<Contactos tipo="proveedores" key="proveedores" />} />
+          <Route path="/gastos" element={<Gastos />} />
+          <Route path="/contabilidad" element={<Contabilidad />} />
           <Route path="/tasas" element={<Tasas />} />
           <Route path="/configuracion" element={<Configuracion />} />
         </Routes>

@@ -21,9 +21,22 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 - **Clientes** con su historial de cotizaciones y pedidos y lo que deben; se pueden elegir o crear desde la cotización.
 - **Proveedores**: las entradas de inventario se asocian a un proveedor y queda el historial de compras.
 
+### Etapa 3
+
+- **Gastos y pagos**: gastos por categoría, pagos a proveedores, retiros y aportes del dueño; deudas con proveedores.
+- **Forma de pago** en compras de inventario y en activos (método de pago, a crédito o aporte propio).
+- **Contabilidad automática** (`src/lib/contabilidad.js`): los asientos se generan a partir de los documentos, así que siempre coinciden con lo registrado.
+  - Ventas al entregar el pedido, por línea de servicio; envíos/recargos e IVA aparte.
+  - Pagos recibidos antes de la entrega = anticipos de clientes; se aplican al entregar.
+  - Consumo de materiales → costo de ventas; mermas y ajustes por conteo → costos.
+  - Compras → inventario contra el método de pago, cuentas por pagar o capital.
+  - Depreciación mensual de cada equipo al cierre de mes.
+  - Asientos manuales para saldos iniciales y correcciones.
+- **Reportes**: libro diario, libro mayor por cuenta, balance de comprobación, estado de resultados y balance general, con filtros de fecha.
+
 ## Próximas etapas
 
-Gastos · Libro diario y libro mayor (asientos automáticos) · Estados financieros · Reportes · Base de datos en la nube con inicio de sesión.
+Reportes de rentabilidad · Base de datos en la nube con inicio de sesión.
 
 ## Dónde se guardan los datos
 

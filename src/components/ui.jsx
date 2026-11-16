@@ -81,3 +81,15 @@ export function useConfig() {
 export function useTasa() {
   return useLiveQuery(() => db.tasas.orderBy('fecha').last(), [])
 }
+
+// ¿Cómo se pagó? Define la cuenta contable de contrapartida.
+export function SelectorPago({ valor, onCambio, metodos, label = '¿Cómo se pagó?', sinAporte }) {
+  return (
+    <Selector label={label} valor={valor} onCambio={onCambio}
+      opciones={[
+        ...(sinAporte ? [] : [{ value: '', label: 'Ya lo tenía / aporte propio (capital)' }]),
+        ...metodos.map((m) => ({ value: m.nombre, label: 'Pagado con ' + m.nombre })),
+        { value: 'credito', label: 'A crédito (queda por pagar)' },
+      ]} />
+  )
+}

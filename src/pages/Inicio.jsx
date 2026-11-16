@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, ESTADOS_PEDIDO, codigoPedido } from '../db.js'
+import { useMemo } from 'react'
+import { db, ESTADOS_PEDIDO, codigoPedido, datosContables } from '../db.js'
+import { generarAsientos, estadoResultados } from '../lib/contabilidad.js'
 import { useConfig, useTasa, Avisos } from '../components/ui.jsx'
 import { bajoStock } from './Inventario.jsx'
 import { codigo, ESTADOS } from './Cotizaciones.jsx'
@@ -13,6 +15,8 @@ export default function Inicio() {
   const productos = useLiveQuery(() => db.productos.toArray(), [], [])
   const activos = useLiveQuery(() => db.activos.count(), [], 0)
   const pedidos = useLiveQuery(() => db.pedidos.toArray(), [], [])
+  const datosC = useLiveQuery(() => datosContables(), [], null)
+  const resMes = useMemo(() => (datosC ? estadoResultados(generarAsientos(datosC), datosC.config, hoy().slice(0, 8) + '01', hoy()) : null), [datosC])
   const cots = useLiveQuery(() => db.cotizaciones.orderBy('numero').reverse().toArray(), [], [])
 
   const mes = hoy().slice(0, 7)
@@ -51,6 +55,21 @@ export default function Inicio() {
         <div className="tarjeta kpi"><div className="etiqueta">Por cobrar</div><div className="valor">{usd(porCobrar)}</div><div className="desglose">saldos de pedidos</div></div>
         <div className="tarjeta kpi"><div className="etiqueta">Valor del inventario</div><div className="valor">{usd(valorInv)}</div><div className="desglose">{productos.length} productos</div></div>
       </div>
+
+      {resMes && (
+        <div className="tarjeta">
+          <div className="encabezado" style={{ marginBottom: 6 }}>
+            <h2 style={{ margin: 0 }}>Resultado de este mes</h2>
+            <Link to="/contabilidad" className="desglose">ver contabilidad →</Link>
+          </div>
+          <div className="grid g4">
+            <div className="kpi"><div className="etiqueta">Ingresos (entregado)</div><div className="valor">{usd(resMes.totalIngresos)}</div></div>
+            <div className="kpi"><div className="etiqueta">Costos</div><div className="valor">{usd(resMes.totalCostos)}</div></div>
+            <div className="kpi"><div className="etiqueta">Gastos</div><div className="valor">{usd(resMes.totalGastos)}</div></div>
+            <div className="kpi"><div className="etiqueta">{resMes.utilidadNeta >= 0 ? 'Utilidad' : 'Pérdida'}</div><div className="valor" style={{ color: resMes.utilidadNeta >= 0 ? 'var(--ok)' : 'var(--alerta)' }}>{usd(resMes.utilidadNeta)}</div></div>
+          </div>
+        </div>
+      )}
 
       {pendientes.length > 0 && (
         <div className="avisos">
