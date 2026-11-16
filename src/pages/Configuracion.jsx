@@ -3,6 +3,7 @@ import { db, exportarRespaldo, importarRespaldo } from '../db.js'
 import { Campo, useConfig } from '../components/ui.jsx'
 import { totalCostosFijos, fijosPorPedido } from '../lib/calc.js'
 import { CATEGORIAS_GASTO } from '../lib/contabilidad.js'
+import { nubeConfigurada, supabase, useSesion, useEstadoNube, sincronizarAhora, metaActual } from '../nube.js'
 import { usd, fecha } from '../lib/format.js'
 
 export default function Configuracion() {
@@ -144,11 +145,14 @@ export default function Configuracion() {
         <button className="sec" onClick={() => set('categoriasGasto', [...(c.categoriasGasto ?? CATEGORIAS_GASTO), ''])}>+ Agregar categoría</button>
       </div>
 
+      <NubeTarjeta />
+
       <div className="tarjeta">
         <h2>Respaldo de datos</h2>
         <p>
-          Tus datos se guardan en este navegador. <strong>Descarga un respaldo con frecuencia</strong> (por ejemplo, cada semana) y guárdalo en
-          Google Drive o en tu computadora. Si borras los datos del navegador o cambias de equipo, lo recuperas con «Restaurar».
+          {nubeConfigurada
+            ? 'Además de la nube, conviene descargar un respaldo de vez en cuando (por ejemplo, cada mes) y guardarlo en Google Drive o en tu computadora.'
+            : <>Tus datos se guardan en este navegador. <strong>Descarga un respaldo con frecuencia</strong> (por ejemplo, cada semana) y guárdalo en Google Drive o en tu computadora. Si borras los datos del navegador o cambias de equipo, lo recuperas con «Restaurar».</>}
         </p>
         <p className="muted">Último respaldo: {c.ultimoRespaldo ? fecha(c.ultimoRespaldo) : 'nunca'}</p>
         <div className="acciones">
@@ -158,5 +162,31 @@ export default function Configuracion() {
         </div>
       </div>
     </>
+  )
+}
+
+function NubeTarjeta() {
+  const sesion = useSesion()
+  const { fase } = useEstadoNube()
+  if (!nubeConfigurada) return (
+    <div className="tarjeta">
+      <h2>Nube</h2>
+      <p className="muted">La nube no está configurada: los datos viven solo en este navegador.</p>
+    </div>
+  )
+  const m = metaActual()
+  return (
+    <div className="tarjeta">
+      <h2>Nube</h2>
+      <p>Sesión iniciada como <strong>{sesion?.user?.email}</strong>. Tus datos se guardan en la nube y se ven igual en todos tus dispositivos.</p>
+      <p className="muted">Estado: {fase === 'ok' ? 'sincronizado' : fase.replace('_', ' ')}{m?.ultimaSync && ' · última vez ' + new Date(m.ultimaSync).toLocaleString('es-VE')}{m?.version ? ' · versión ' + m.version : ''}</p>
+      <div className="acciones">
+        <button className="sec" onClick={() => sincronizarAhora()}>Sincronizar ahora</button>
+        <button className="peligro" onClick={async () => {
+          if (!confirm('¿Cerrar sesión en este dispositivo? Los datos quedan guardados en la nube.')) return
+          await supabase.auth.signOut()
+        }}>Cerrar sesión</button>
+      </div>
+    </div>
   )
 }

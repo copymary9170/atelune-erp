@@ -8,9 +8,10 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node --test tests/calc.test.js tests/contabilidad.test.js"
+    "test": "node --test tests/calc.test.js tests/contabilidad.test.js tests/sincronizador.test.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",
     "react": "^19.3.1",

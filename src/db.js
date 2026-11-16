@@ -120,12 +120,27 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
 // ---------- Respaldo ----------
 const TABLAS = ['config', 'productos', 'movimientos', 'activos', 'tasas', 'plantillas', 'cotizaciones', 'clientes', 'proveedores', 'pedidos', 'gastos', 'asientosManuales']
 
-export async function exportarRespaldo() {
+export async function exportarDatos() {
   const datos = { app: 'atelune-erp', version: 1, fecha: new Date().toISOString() }
-  for (const t of TABLAS) datos[t] = await db[t].toArray()
+  await db.transaction('r', TABLAS.map((t) => db[t]), async () => {
+    for (const t of TABLAS) datos[t] = await db[t].toArray()
+  })
+  return datos
+}
+
+export async function exportarRespaldo() {
+  const datos = await exportarDatos()
   await db.config.update('general', { ultimoRespaldo: datos.fecha })
   return datos
 }
+
+export async function tieneDatos() {
+  for (const t of ['productos', 'pedidos', 'cotizaciones', 'activos', 'gastos', 'clientes', 'proveedores', 'movimientos', 'plantillas', 'asientosManuales'])
+    if ((await db[t].count()) > 0) return true
+  return false
+}
+
+export { TABLAS }
 
 export async function importarRespaldo(datos) {
   if (datos?.app !== 'atelune-erp') throw new Error('El archivo no es un respaldo de Atelune.')

@@ -1,0 +1,106 @@
+// Sincronización «primero local»: la app siempre trabaja con los datos del navegador
+// (funciona sin internet) y cuando hay conexión sube o baja una copia completa a la nube.
+//
+// Cada guardado en la nube aumenta un número de versión. Si al subir la versión de la
+// nube ya no es la que conocía este dispositivo, otro dispositivo guardó antes: si aquí
+// no había cambios se baja la copia nueva; si había cambios en ambos lados, se le pregunta
+// a la usuaria cuál conservar (nunca se pisa nada en silencio).
+
+/**
+ * remoto: { leer(): {datos, version}|null, insertar(datos): version, actualizar(datos, versionEsperada): version|null }
+ * local:  { exportar(): datos, importar(datos), tieneDatos(): bool }
+ * meta:   { get(): {version, sucio}, set(parcial) }  — guardado fuera de la base de datos
+ * alEstado(estado, detalle)  estados: 'sincronizando' | 'ok' | 'sin_conexion' | 'conflicto' | 'error'
+ */
+export function crearSincronizador({ remoto, local, meta, alEstado = () => {} }) {
+  let ocupado = false
+  let repetir = false
+  let cambios = 0 // cuenta los cambios locales para saber si hubo más mientras se subía
+  let conflicto = null
+  let aplicandoRemoto = false
+
+  const estado = (e, d) => alEstado(e, d)
+
+  async function bajar(r) {
+    aplicandoRemoto = true
+    try {
+      await local.importar(r.datos)
+    } finally {
+      aplicandoRemoto = false
+    }
+    meta.set({ version: r.version, sucio: false, ultimaSync: new Date().toISOString() })
+  }
+
+  async function subir(versionEsperada) {
+    const marca = cambios
+    const datos = await local.exportar()
+    const v = versionEsperada == null ? await remoto.insertar(datos) : await remoto.actualizar(datos, versionEsperada)
+    if (v == null) return false // otro dispositivo guardó primero
+    meta.set({ version: v, sucio: cambios !== marca, ultimaSync: new Date().toISOString() })
+    return true
+  }
+
+  async function sincronizar() {
+    if (conflicto) return estado('conflicto', conflicto)
+    if (ocupado) { repetir = true; return }
+    ocupado = true
+    estado('sincronizando')
+    try {
+      for (let intento = 0; intento < 3; intento++) {
+        const m = meta.get()
+        const r = await remoto.leer()
+        if (!r) {
+          // La nube está vacía: se sube lo de este dispositivo.
+          await subir(null)
+        } else if (m.version == null) {
+          // Primera vez en este dispositivo.
+          if (await local.tieneDatos()) { conflicto = r; return estado('conflicto', r) }
+          await bajar(r)
+        } else if (r.version > m.version) {
+          if (m.sucio) { conflicto = r; return estado('conflicto', r) }
+          await bajar(r)
+        } else if (m.sucio || r.version < m.version) {
+          if (!(await subir(r.version))) continue // cambió entre leer y subir: reintentar
+        }
+        break
+      }
+      estado(meta.get().sucio ? 'sincronizando' : 'ok', meta.get())
+    } catch (e) {
+      estado(esErrorDeRed(e) ? 'sin_conexion' : 'error', e)
+    } finally {
+      ocupado = false
+      if (repetir || (meta.get().sucio && !conflicto)) {
+        repetir = false
+        if (meta.get().sucio && !conflicto) setTimeout(sincronizar, 1500)
+      }
+    }
+  }
+
+  return {
+    sincronizar,
+    marcarCambio() {
+      if (aplicandoRemoto) return
+      cambios++
+      meta.set({ sucio: true })
+    },
+    get aplicandoRemoto() { return aplicandoRemoto },
+    get conflicto() { return conflicto },
+    /** eleccion: 'nube' (bajar y descartar lo local) o 'local' (subir y reemplazar la nube). */
+    async resolver(eleccion) {
+      const r = conflicto
+      if (!r) return
+      if (eleccion === 'nube') await bajar(r)
+      else {
+        const ok = await subir(r.version)
+        if (!ok) { conflicto = await remoto.leer(); return estado('conflicto', conflicto) }
+      }
+      conflicto = null
+      estado('ok', meta.get())
+    },
+  }
+}
+
+export function esErrorDeRed(e) {
+  const t = String(e?.message || e)
+  return /fetch|network|Failed to fetch|NetworkError|timeout|offline/i.test(t) || (typeof navigator !== 'undefined' && navigator.onLine === false)
+}

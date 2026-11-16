@@ -34,9 +34,23 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
   - Asientos manuales para saldos iniciales y correcciones.
 - **Reportes**: libro diario, libro mayor por cuenta, balance de comprobación, estado de resultados y balance general, con filtros de fecha.
 
+### Etapa 4: datos en la nube
+
+- **Primero local**: la app trabaja con los datos del navegador (funciona sin internet) y guarda una copia completa en Supabase cuando hay conexión. Ver `src/lib/sincronizador.js` y `src/nube.js`.
+- Cada guardado aumenta un número de versión. Si dos dispositivos cambian datos a la vez, la app pregunta cuál conservar: nunca pisa nada en silencio.
+- Inicio de sesión con correo y contraseña; cada usuaria solo puede ver su propia fila (políticas RLS en `supabase/esquema.sql`).
+- Sin las variables de Supabase, la app sigue funcionando solo en el navegador.
+
+#### Configuración
+
+1. Crear la base Supabase desde Vercel (Storage → Supabase). La integración crea `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` (también se aceptan `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`). Solo se exponen variables `VITE_*` y `NEXT_PUBLIC_*`; las claves secretas nunca llegan al navegador.
+2. Ejecutar `supabase/esquema.sql` en el SQL Editor de Supabase.
+3. Crear la usuaria en Supabase → Authentication → Users → Add user (con «Auto Confirm») y desactivar los registros nuevos (Authentication → Sign In / Providers → «Allow new users to sign up»).
+4. Volver a desplegar en Vercel.
+
 ## Próximas etapas
 
-Reportes de rentabilidad · Base de datos en la nube con inicio de sesión.
+Reportes de rentabilidad.
 
 ## Dónde se guardan los datos
 

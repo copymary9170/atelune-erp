@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { nubeConfigurada, useSesion, iniciarNube, detenerNube } from './nube.js'
+import { Acceso, IndicadorNube, ConflictoNube } from './components/Nube.jsx'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { Logo } from './components/ui.jsx'
 import Inicio from './pages/Inicio.jsx'
@@ -34,9 +36,22 @@ const MENU = [
   { to: '/configuracion', label: 'Configuración y respaldo' },
 ]
 
-const PROXIMAMENTE = ['Reportes', 'Datos en la nube']
+const PROXIMAMENTE = ['Reportes de rentabilidad']
 
 export default function App() {
+  const sesion = useSesion()
+  const uid = sesion?.user?.id
+  useEffect(() => {
+    if (uid) iniciarNube(uid)
+    else detenerNube()
+  }, [uid])
+
+  if (nubeConfigurada && sesion === undefined) return <p className="muted" style={{ padding: 30 }}>Cargando…</p>
+  if (nubeConfigurada && !sesion) return <Acceso />
+  return <Interfaz />
+}
+
+function Interfaz() {
   const [abierto, setAbierto] = useState(false)
   const { pathname } = useLocation()
   if (pathname.endsWith('/imprimir'))
@@ -70,7 +85,9 @@ export default function App() {
         {PROXIMAMENTE.map((p) => (
           <div className="proximo" key={p}>{p}</div>
         ))}
+        {nubeConfigurada && <IndicadorNube />}
       </nav>
+      <ConflictoNube />
       <main className="contenido">
         <Routes>
           <Route path="/" element={<Inicio />} />
