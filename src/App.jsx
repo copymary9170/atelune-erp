@@ -16,6 +16,7 @@ import Pedidos, { PedidoDetalle } from './pages/Pedidos.jsx'
 import Contactos from './pages/Contactos.jsx'
 import Gastos from './pages/Gastos.jsx'
 import Contabilidad from './pages/Contabilidad.jsx'
+import Reparto from './pages/Reparto.jsx'
 
 const MENU = [
   { to: '/', label: 'Inicio', end: true },
@@ -30,6 +31,7 @@ const MENU = [
   { to: '/proveedores', label: 'Proveedores' },
   { seccion: 'Finanzas' },
   { to: '/gastos', label: 'Gastos y pagos' },
+  { to: '/reparto', label: 'Reparto de utilidades' },
   { to: '/contabilidad', label: 'Contabilidad' },
   { seccion: 'Ajustes' },
   { to: '/tasas', label: 'Tasa de cambio' },
@@ -101,6 +103,7 @@ function Interfaz() {
           <Route path="/clientes" element={<Contactos tipo="clientes" key="clientes" />} />
           <Route path="/proveedores" element={<Contactos tipo="proveedores" key="proveedores" />} />
           <Route path="/gastos" element={<Gastos />} />
+          <Route path="/reparto" element={<Reparto />} />
           <Route path="/contabilidad" element={<Contabilidad />} />
           <Route path="/tasas" element={<Tasas />} />
           <Route path="/configuracion" element={<Configuracion />} />

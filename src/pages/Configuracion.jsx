@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { db, exportarRespaldo, importarRespaldo, agregarDatos } from '../db.js'
+import { db, exportarRespaldo, importarRespaldo, agregarDatos, reglaGeneral } from '../db.js'
 import { Campo, useConfig } from '../components/ui.jsx'
-import { totalCostosFijos, fijosPorPedido } from '../lib/calc.js'
+import { totalCostosFijos, fijosPorPedido, personas as listaPersonas, validarRegla } from '../lib/calc.js'
 import { CATEGORIAS_GASTO } from '../lib/contabilidad.js'
 import { nubeConfigurada, supabase, useSesion, useEstadoNube, sincronizarAhora, metaActual } from '../nube.js'
 import { usd, fecha } from '../lib/format.js'
@@ -25,7 +25,8 @@ export default function Configuracion() {
     e.target.value = ''
   }
 
-  useEffect(() => setC(guardada), [guardada])
+  // Las personas y la regla de reparto se completan con sus valores por defecto para poder editarlas.
+  useEffect(() => setC({ ...guardada, personas: listaPersonas(guardada), reparto: reglaGeneral(guardada) }), [guardada])
 
   const set = (k, v) => setC((x) => ({ ...x, [k]: v }))
   const setLista = (k, i, campo, v) =>
@@ -34,7 +35,10 @@ export default function Configuracion() {
   const agregar = (k, nuevo) => setC((x) => ({ ...x, [k]: [...(x[k] || []), nuevo] }))
 
   async function guardar() {
-    await db.config.put(c)
+    const errorRegla = c.reparto.destinos.every((d) => d.pct == null || d.pct === '') ? null : validarRegla(c.reparto)
+    if (errorRegla) return alert('Regla de reparto: ' + errorRegla)
+    if (c.personas.some((p) => !p.nombre?.trim())) return alert('Escribe el nombre de cada persona.')
+    await db.config.put({ ...c, tarifaHora: c.personas[0]?.tarifaHora ?? null })
     setEstado('Cambios guardados ✓')
     setTimeout(() => setEstado(''), 2500)
   }
@@ -62,6 +66,21 @@ export default function Configuracion() {
     e.target.value = ''
   }
 
+  const siguienteIdPersona = Math.max(0, ...(c.personas || []).map((p) => p.id)) + 1
+  function agregarPersona() {
+    const id = siguienteIdPersona
+    setC((x) => ({ ...x, personas: [...x.personas, { id, nombre: '', tarifaHora: null }],
+      reparto: { destinos: [...x.reparto.destinos, { tipo: 'persona', personaId: id, pct: null }] } }))
+  }
+  function quitarPersona(id) {
+    if (c.personas.length === 1) return alert('Debe quedar al menos una persona.')
+    if (!confirm('¿Quitar a esta persona? Los pedidos ya creados conservan su información.')) return
+    setC((x) => ({ ...x, personas: x.personas.filter((p) => p.id !== id),
+      reparto: { destinos: x.reparto.destinos.filter((d) => d.personaId !== id) } }))
+  }
+  const setPct = (i, v) => setC((x) => ({ ...x, reparto: { destinos: x.reparto.destinos.map((d, j) => (j === i ? { ...d, pct: v } : d)) } }))
+  const sumaRegla = (c.reparto?.destinos || []).reduce((s, d) => s + (Number(d.pct) || 0), 0)
+
   const siguienteIdLinea = Math.max(0, ...(c.lineas || []).map((l) => l.id)) + 1
 
   return (
@@ -82,8 +101,6 @@ export default function Configuracion() {
           <h2>Negocio y mano de obra</h2>
           <Campo label="Nombre del negocio" valor={c.nombreNegocio} onCambio={(v) => set('nombreNegocio', v)} />
           <Campo label="Contacto (aparece en la cotización)" valor={c.contacto} onCambio={(v) => set('contacto', v)} placeholder="WhatsApp, Instagram, correo…" />
-          <Campo label="Tarifa por hora de trabajo ($)" tipo="number" valor={c.tarifaHora} onCambio={(v) => set('tarifaHora', v)}
-            ayuda="Lo que vale una hora de tu tiempo de diseño y producción." />
           <Campo label="Merma por defecto (%)" tipo="number" valor={c.mermaPorDefecto} onCambio={(v) => set('mermaPorDefecto', v)}
             ayuda="Desperdicio de materiales (pruebas, errores, recortes). Se puede cambiar en cada trabajo." />
           <Campo label="Costo de la electricidad ($ por kWh)" tipo="number" valor={c.costoKwh} onCambio={(v) => set('costoKwh', v)} />
@@ -96,6 +113,35 @@ export default function Configuracion() {
           <Campo label="Vigencia de la cotización (días)" tipo="number" valor={c.vigenciaDias} onCambio={(v) => set('vigenciaDias', v)} />
           <Campo label="Condiciones (aparecen al pie de la cotización)" tipo="textarea" valor={c.condiciones} onCambio={(v) => set('condiciones', v)}
             placeholder="Ej.: abono para iniciar, tiempos de entrega, cambios de diseño…" />
+        </div>
+      </div>
+
+      <div className="grid g2">
+        <div className="tarjeta">
+          <h2>Personas y mano de obra</h2>
+          <p className="muted">Quién trabaja en el negocio y cuánto vale su hora. En cada trabajo eliges la persona responsable; su mano de obra se descuenta como costo antes de calcular la utilidad.</p>
+          {(c.personas || []).map((p, i) => (
+            <div className="fila" key={p.id}>
+              <Campo label={i === 0 ? 'Nombre' : ''} valor={p.nombre} onCambio={(v) => setLista('personas', i, 'nombre', v)} />
+              <Campo className="angosto" label={i === 0 ? '$ por hora' : ''} tipo="number" valor={p.tarifaHora} onCambio={(v) => setLista('personas', i, 'tarifaHora', v)} placeholder="pendiente" />
+              <div className="campo auto"><button className="peligro mini" onClick={() => quitarPersona(p.id)}>×</button></div>
+            </div>
+          ))}
+          <button className="sec" onClick={agregarPersona}>+ Agregar persona</button>
+        </div>
+
+        <div className="tarjeta">
+          <h2>Regla general de reparto</h2>
+          <p className="muted">Cómo se reparte la utilidad de cada pedido (después de costos y mano de obra). Debe sumar 100 %. Cada pedido copia esta regla al crearse y se puede cambiar solo para ese pedido.</p>
+          {(c.reparto?.destinos || []).map((d, i) => (
+            <div className="fila" key={i}>
+              <div className="campo" style={{ alignSelf: 'center' }}>{d.tipo === 'reinversion' ? 'Reinversión (queda en el negocio)' : (c.personas.find((p) => p.id === d.personaId)?.nombre || 'Persona')}</div>
+              <Campo className="angosto" tipo="number" valor={d.pct} onCambio={(v) => setPct(i, v)} placeholder="%" />
+            </div>
+          ))}
+          <p className={Math.abs(sumaRegla - 100) < 0.001 ? 'ayuda' : 'pendiente'}>
+            Suma: {sumaRegla} % {(c.reparto?.destinos || []).every((d) => d.pct == null || d.pct === '') ? '— [DATO PENDIENTE]: define tu regla' : Math.abs(sumaRegla - 100) < 0.001 ? '✓' : '— debe sumar 100 %'}
+          </p>
         </div>
       </div>
 

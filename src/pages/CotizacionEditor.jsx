@@ -6,7 +6,7 @@ import { Avisos, Campo, Selector } from '../components/ui.jsx'
 import ItemEditor, { itemVacio } from '../components/ItemEditor.jsx'
 import { useDatosCalculo } from './Plantillas.jsx'
 import { ESTADOS, codigo } from './Cotizaciones.jsx'
-import { calcularCotizacion, avisosCotizacion } from '../lib/calc.js'
+import { calcularCotizacion, avisosCotizacion, faltantesDeCosto } from '../lib/calc.js'
 import { usd, bs, pct, num } from '../lib/format.js'
 
 // Guarda una copia de los números para la lista y el documento impreso.
@@ -34,6 +34,7 @@ export default function CotizacionEditor() {
 
   const r = useMemo(() => (c ? calcularCotizacion(c, datos) : null), [c, datos])
   const avisos = useMemo(() => (c ? avisosCotizacion(c, datos) : []), [c, datos])
+  const faltantes = useMemo(() => (c ? faltantesDeCosto(c, datos) : []), [c, datos])
 
   if (guardada === undefined && !c) return <p className="muted">Cargando…</p>
   if (!c) return <p>No se encontró la cotización.</p>
@@ -60,7 +61,10 @@ export default function CotizacionEditor() {
   async function convertirEnPedido() {
     if (!c.items.length) return
     await db.cotizaciones.put({ ...c, calculo: resumenCalculo(r) })
-    if (!confirm('Se creará un pedido con estos trabajos y precios, y la cotización quedará como aprobada. ¿Continuar?')) return
+    const aviso = faltantes.length
+      ? `ATENCIÓN: el costo está INCOMPLETO (${faltantes.join('; ')}). El pedido quedará marcado como «costo incompleto» y su utilidad será provisional hasta completar esos datos.\n\n`
+      : ''
+    if (!confirm(aviso + 'Se creará un pedido con estos trabajos y precios, y la cotización quedará como aprobada. ¿Continuar?')) return
     const pid = await crearPedidoDesdeCotizacion(c.id)
     navigate('/pedidos/' + pid)
   }
@@ -186,7 +190,8 @@ export default function CotizacionEditor() {
         </div>
 
         <div className="tarjeta">
-          <h2>Resultado</h2>
+          <h2>Resultado {faltantes.length > 0 && <span className="etiqueta-tipo bajo" style={{ fontSize: '.75rem', verticalAlign: 'middle' }}>costo incompleto</span>}</h2>
+          {faltantes.length > 0 && <p className="pendiente" style={{ marginTop: -6 }}>La ganancia es provisional: faltan {faltantes.length} dato(s) de costo (ver arriba). No es lo mismo que costo cero.</p>}
           <table className="resumen">
             <tbody>
               <tr><td>Subtotal trabajos</td><td className="num">{usd(r.subtotal)}</td></tr>

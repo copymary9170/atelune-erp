@@ -1,5 +1,5 @@
 import { Campo, Selector } from './ui.jsx'
-import { costoHoraActivo, n } from '../lib/calc.js'
+import { costoHoraActivo, n, personas } from '../lib/calc.js'
 import { usd } from '../lib/format.js'
 
 // Editor de un trabajo (se usa en plantillas y en renglones de cotización).
@@ -56,6 +56,8 @@ export default function ItemEditor({ item, onCambio, productos, activos, config,
       </div>
 
       <div className="fila">
+        <Selector label="Responsable (mano de obra)" valor={item.personaId ?? personas(config)[0]?.id} onCambio={(v) => set('personaId', Number(v))}
+          opciones={personas(config).map((p) => ({ value: p.id, label: p.nombre + (p.tarifaHora ? ` ($${p.tarifaHora}/h)` : ' (tarifa pendiente)') }))} />
         <Campo label="Minutos de diseño (total)" tipo="number" valor={item.minutosDiseno} onCambio={(v) => set('minutosDiseno', v)} />
         <Campo label="Minutos de producción (por unidad)" tipo="number" valor={item.minutosProduccion} onCambio={(v) => set('minutosProduccion', v)} />
         <Campo label="Merma (%)" tipo="number" valor={item.mermaPct} onCambio={(v) => set('mermaPct', v)}

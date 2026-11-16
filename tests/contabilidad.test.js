@@ -88,3 +88,19 @@ test('asiento redondea y cuadra', () => {
   const a = k.asiento('2026-01-01', 'x', {}, [{ cuenta: 'a', debe: 10 }, { cuenta: 'b', haber: 3.333 }, { cuenta: 'c', haber: 6.666 }])
   assert.equal(r(a.lineas.reduce((s, l) => s + l.debe - l.haber, 0)), 0)
 })
+
+test('pago de mano de obra y reparto de utilidades', () => {
+  const as2 = k.generarAsientos({ config, gastos: [
+    { id: 1, tipo: 'aporte', fecha: '2026-04-01', monto: 50, pagadoCon: 'Pago móvil' },
+    { id: 2, tipo: 'pago_mano_obra', fecha: '2026-04-02', monto: 8, pagadoCon: 'Pago móvil', personaNombre: 'Hermana' },
+    { id: 3, tipo: 'reparto', fecha: '2026-04-03', monto: 4.25, pagadoCon: 'Pago móvil', personaNombre: 'Mary' },
+  ] }, hasta)
+  const s = k.sumasPorCuenta(as2)
+  assert.equal(s['6.3.01'].debe, 8)
+  assert.equal(s['3.1.03'].debe, 4.25)
+  const er = k.estadoResultados(as2, config)
+  assert.equal(er.totalGastos, 8) // la mano de obra pagada es gasto
+  const b = k.balanceGeneral(as2, config, '2026-04-30')
+  assert.equal(r(b.totalActivo), r(b.totalPasivo + b.totalPatrimonio)) // el reparto reduce patrimonio, no es gasto
+  assert.equal(r(b.totalActivo), 37.75)
+})

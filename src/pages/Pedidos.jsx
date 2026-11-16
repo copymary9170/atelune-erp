@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, ESTADOS_PEDIDO, ESTADOS_CON_CONSUMO, codigoPedido, cambiarEstadoPedido, tasaVigente } from '../db.js'
 import { Campo, Selector, Modal, useConfig } from '../components/ui.jsx'
 import { codigo } from './Cotizaciones.jsx'
+import RepartoPedido from '../components/RepartoPedido.jsx'
 import { consumoPedido, saldoPedido, totalAbonos, n } from '../lib/calc.js'
 import { usd, bs, num, fecha, hoy } from '../lib/format.js'
 
@@ -110,6 +111,7 @@ export function PedidoDetalle() {
       <div className="encabezado">
         <div>
           <h1>{codigoPedido(p.numero)} <span className={'etiqueta-tipo' + claseEstado(p.estado)} style={{ fontSize: '.85rem', verticalAlign: 'middle' }}>{ESTADOS_PEDIDO[p.estado]}</span></h1>
+          {p.costoIncompleto?.length > 0 && <span className="etiqueta-tipo bajo">costo incompleto</span>}
           <p>{p.cliente || 'Sin cliente'}{p.contactoCliente && ' · ' + p.contactoCliente}{cot && <> · desde <Link to={'/cotizaciones/' + cot.id}>{codigo(cot.numero)}</Link></>}</p>
         </div>
         <div className="acciones">
@@ -187,6 +189,8 @@ export function PedidoDetalle() {
           </table>
         </div>
       </div>
+
+      <RepartoPedido pedido={p} config={config} />
 
       <div className="tarjeta">
         <h3>Historial</h3>

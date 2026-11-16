@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db.js'
 import { Modal, useConfig } from '../components/ui.jsx'
 import ItemEditor, { itemVacio } from '../components/ItemEditor.jsx'
-import { costoItem, precioDesdeMargen, fijosPorPedido, n } from '../lib/calc.js'
+import { costoItem, precioDesdeMargen, fijosPorPedido, n, responsable } from '../lib/calc.js'
 import { usd } from '../lib/format.js'
 
 export function useDatosCalculo() {
@@ -72,7 +72,7 @@ function PlantillaForm({ inicial, datos, onCerrar }) {
       <p className="desglose">
         Costo de 1 unidad: materiales {usd(costo.materiales)} · máquinas {usd(costo.maquinas)} · mano de obra {usd(costo.manoObra)} · otros {usd(costo.extras)} ·{' '}
         <strong>total {usd(costo.total)}</strong>
-        {!n(datos.config.tarifaHora) && ' (sin mano de obra: falta tu tarifa por hora)'}
+        {!n(responsable(p, datos.config)?.tarifaHora) && ` (sin mano de obra: falta la tarifa por hora de ${responsable(p, datos.config)?.nombre})`}
       </p>
       <div className="modal-pie">
         {!nuevo && (

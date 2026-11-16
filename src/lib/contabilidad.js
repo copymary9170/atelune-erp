@@ -27,11 +27,13 @@ export const CUENTAS_FIJAS = {
   '2.1.03': { nombre: 'IVA por pagar', tipo: 'pasivo' },
   '3.1.01': { nombre: 'Capital', tipo: 'patrimonio' },
   '3.1.02': { nombre: 'Retiros del dueño', tipo: 'patrimonio', contra: true },
+  '3.1.03': { nombre: 'Utilidades repartidas', tipo: 'patrimonio', contra: true },
   '4.2.01': { nombre: 'Envíos y recargos cobrados', tipo: 'ingreso' },
   '5.1.01': { nombre: 'Costo de ventas (materiales)', tipo: 'costo' },
   '5.1.02': { nombre: 'Mermas de inventario', tipo: 'costo' },
   '5.1.03': { nombre: 'Ajustes y consumos de inventario', tipo: 'costo' },
   '6.2.01': { nombre: 'Depreciación de equipos', tipo: 'gasto' },
+  '6.3.01': { nombre: 'Mano de obra pagada', tipo: 'gasto' },
 }
 
 export const cuentaDisponible = (metodo) => '1.1.01:' + (metodo || 'Sin método')
@@ -192,6 +194,16 @@ export function generarAsientos(datos, hasta = new Date()) {
     } else if (g.tipo === 'retiro') {
       push(asiento(g.fecha, 'Retiro del dueño' + desc, origen, [
         { cuenta: '3.1.02', debe: g.monto },
+        { cuenta: cuentaDisponible(g.pagadoCon), haber: g.monto },
+      ]))
+    } else if (g.tipo === 'pago_mano_obra') {
+      push(asiento(g.fecha, 'Pago de mano de obra' + (g.personaNombre ? ' a ' + g.personaNombre : '') + desc, origen, [
+        { cuenta: '6.3.01', debe: g.monto },
+        { cuenta: cuentaDisponible(g.pagadoCon), haber: g.monto },
+      ]))
+    } else if (g.tipo === 'reparto') {
+      push(asiento(g.fecha, 'Reparto de utilidades' + (g.personaNombre ? ' a ' + g.personaNombre : '') + desc, origen, [
+        { cuenta: '3.1.03', debe: g.monto },
         { cuenta: cuentaDisponible(g.pagadoCon), haber: g.monto },
       ]))
     } else if (g.tipo === 'aporte') {

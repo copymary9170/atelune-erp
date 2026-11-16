@@ -71,7 +71,7 @@ test('cotización completa (valores de prueba ficticios)', () => {
 
 test('avisos por datos pendientes', () => {
   const config = { tarifaHora: null, mermaPorDefecto: null, costosFijos: [], lineas: [{ id: 1, nombre: 'Impresión', margenPct: null }] }
-  const av = c.avisosCotizacion({ items: [{ lineaId: 1 }] }, { productos: [], activos: [], config })
+  const av = c.avisosCotizacion({ items: [{ lineaId: 1, minutosDiseno: 10 }] }, { productos: [], activos: [], config })
   assert.ok(av.some((a) => a.includes('tarifa')))
   assert.ok(av.some((a) => a.includes('Impresión')))
   assert.ok(av.some((a) => a.includes('tasa')))
@@ -94,4 +94,54 @@ test('saldo de pedido', () => {
   const p = { total: 50, abonos: [{ monto: 20 }, { monto: 10 }] }
   assert.equal(c.totalAbonos(p), 30)
   assert.equal(c.saldoPedido(p), 20)
+})
+
+test('mano de obra según la persona responsable', () => {
+  const config = { mermaPorDefecto: 0, personas: [{ id: 1, nombre: 'Mary', tarifaHora: 2.5 }, { id: 2, nombre: 'Hermana', tarifaHora: 4 }] }
+  const base = { cantidad: 1, minutosDiseno: 120, materiales: [], maquinas: [], extras: [] }
+  assert.equal(c.costoItem({ ...base }, { productos: [], activos: [], config }).manoObra, 5) // por defecto la primera persona
+  assert.equal(c.costoItem({ ...base, personaId: 2 }, { productos: [], activos: [], config }).manoObra, 8)
+  // compatibilidad con la tarifa única anterior
+  assert.equal(c.costoItem(base, { productos: [], activos: [], config: { tarifaHora: 3 } }).manoObra, 6)
+})
+
+test('reparto: regla 40/60/0 (caso Natalia) y conservación de centavos', () => {
+  const regla = { destinos: [{ tipo: 'reinversion', pct: 40 }, { tipo: 'persona', personaId: 1, pct: 60 }, { tipo: 'persona', personaId: 2, pct: 0 }] }
+  const r = c.repartir(7.08, regla)
+  assert.equal(r.valido, true)
+  assert.deepEqual(r.destinos.map((d) => d.monto), [2.83, 4.25, 0])
+  assert.equal(c.redondear(r.destinos.reduce((s, d) => s + d.monto, 0), 2), 7.08)
+  const t = c.repartir(10, { destinos: [{ tipo: 'reinversion', pct: 33.33 }, { tipo: 'persona', pct: 33.33 }, { tipo: 'persona', pct: 33.34 }] })
+  assert.equal(c.redondear(t.destinos.reduce((s, d) => s + d.monto, 0), 2), 10)
+})
+
+test('reparto: pérdida, regla incompleta o que no suma 100', () => {
+  const ok = { destinos: [{ tipo: 'reinversion', pct: 40 }, { tipo: 'persona', pct: 60 }] }
+  assert.equal(c.repartir(-1, ok).valido, false)
+  assert.equal(c.repartir(0, ok).valido, false)
+  assert.match(c.repartir(5, { destinos: [{ tipo: 'reinversion', pct: null }] }).motivo, /Faltan/)
+  assert.match(c.repartir(5, { destinos: [{ tipo: 'reinversion', pct: 40 }, { tipo: 'persona', pct: 50 }] }).motivo, /suman 90/)
+})
+
+test('caso Natalia con datos del documento', () => {
+  // Costos puestos en inventario según el documento (materiales conocidos).
+  const productos = [
+    { id: 1, nombre: 'Cartulina roja (hoja carta)', costoPromedio: 3 / 4 },
+    { id: 2, nombre: 'Cartulina azul (hoja carta)', costoPromedio: 3 / 4 },
+    { id: 3, nombre: 'Opalina', costoPromedio: (100 * 0.25 + 1) / 100 },
+    { id: 4, nombre: 'Fotográfico', costoPromedio: (17 + 2) / 50 },
+    { id: 5, nombre: 'Pitillo', costoPromedio: (6 + 1) / 50 },
+  ]
+  const config = { mermaPorDefecto: 0, personas: [{ id: 1, nombre: 'Mary', tarifaHora: 2.5 }], lineas: [{ id: 9, nombre: 'Manualidades', margenPct: 0 }], metodosPago: [{ nombre: 'X' }] }
+  const item = { lineaId: 9, cantidad: 1, personaId: 1, minutosDiseno: 120, materiales: [
+    { productoId: 1, cantidad: 1 }, { productoId: 2, cantidad: 1 }, { productoId: 3, cantidad: 2 }, { productoId: 4, cantidad: 2 }, { productoId: 5, cantidad: 1 },
+  ], maquinas: [], extras: [] }
+  const d = c.costoItem(item, { productos, activos: [], config })
+  assert.equal(c.redondear(d.materiales, 2), 2.92)
+  assert.equal(d.manoObra, 5)
+  assert.equal(c.redondear(d.total, 2), 7.92)
+  // Venta de referencia 15: utilidad 7,08 antes de los costos aún desconocidos (cinta, pega, tinta, desgaste).
+  const pedido = { precios: [{ precio: 15, costo: d.total, manoObra: d.manoObra, personaId: 1 }] }
+  assert.equal(c.redondear(c.utilidadPedido(pedido), 2), 7.08)
+  assert.equal(c.manoObraPorPersona(pedido).get(1), 5)
 })

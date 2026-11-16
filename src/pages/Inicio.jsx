@@ -6,7 +6,7 @@ import { generarAsientos, estadoResultados } from '../lib/contabilidad.js'
 import { useConfig, useTasa, Avisos } from '../components/ui.jsx'
 import { bajoStock } from './Inventario.jsx'
 import { codigo, ESTADOS } from './Cotizaciones.jsx'
-import { n, saldoPedido } from '../lib/calc.js'
+import { n, saldoPedido, personas } from '../lib/calc.js'
 import { usd, num, fecha, hoy } from '../lib/format.js'
 
 export default function Inicio() {
@@ -29,7 +29,8 @@ export default function Inicio() {
     .sort((a, b) => (a.fechaEntrega || '9999') < (b.fechaEntrega || '9999') ? -1 : 1)
   const porCobrar = pedidos.filter((p) => p.estado !== 'cancelado').reduce((s, p) => s + Math.max(0, saldoPedido(p)), 0)
   const pendientes = []
-  if (!n(config.tarifaHora)) pendientes.push('Tu tarifa por hora de trabajo')
+  if (personas(config).some((p) => !n(p.tarifaHora))) pendientes.push('La tarifa por hora de cada persona')
+  if (!config.reparto?.destinos?.every((d) => d.pct != null && d.pct !== '')) pendientes.push('Tu regla de reparto de utilidades')
   if (config.mermaPorDefecto == null) pendientes.push('El % de merma por defecto')
   if ((config.lineas || []).some((l) => l.margenPct == null)) pendientes.push('El margen de cada línea de servicio')
   if (!config.costosFijos?.length) pendientes.push('Tus costos fijos mensuales')

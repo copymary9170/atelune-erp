@@ -83,9 +83,20 @@ export function fijosPorPedido(config) {
  * Materiales, máquinas, minutos de producción y extras son POR UNIDAD;
  * el diseño se cobra una vez por renglón.
  */
+// ---------- Personas ----------
+/** Personas que trabajan en el negocio. Compatibilidad: si no hay lista, se usa la tarifa única anterior. */
+export function personas(config) {
+  if (Array.isArray(config.personas) && config.personas.length) return config.personas
+  return [{ id: 1, nombre: 'Mary', tarifaHora: config.tarifaHora ?? null }]
+}
+export function responsable(item, config) {
+  const ps = personas(config)
+  return ps.find((p) => p.id === Number(item.personaId)) || ps[0]
+}
+
 export function costoItem(item, { productos, activos, config }) {
   const cant = Math.max(0, n(item.cantidad))
-  const tarifa = n(config.tarifaHora)
+  const tarifa = n(responsable(item, config)?.tarifaHora)
   const merma = n(item.mermaPct ?? config.mermaPorDefecto) / 100
 
   const materialesBase = (item.materiales || []).reduce((s, m) => {
@@ -109,6 +120,7 @@ export function costoItem(item, { productos, activos, config }) {
     manoObra: produccion * cant + diseno,
     extras: extras * cant,
     total: porUnidad * cant + diseno,
+    personaId: responsable(item, config)?.id ?? null,
   }
 }
 
@@ -176,7 +188,11 @@ export function calcularCotizacion(cot, { productos, activos, config }) {
 /** Avisos de datos que faltan y harían que el cálculo quede incompleto. */
 export function avisosCotizacion(cot, { productos, activos, config }) {
   const av = new Set()
-  if (!n(config.tarifaHora)) av.add('Falta tu tarifa por hora (Configuración): la mano de obra se está calculando en $0.')
+  for (const it of cot.items || []) {
+    const r = responsable(it, config)
+    if ((n(it.minutosDiseno) || n(it.minutosProduccion)) && !n(r?.tarifaHora))
+      av.add(`Falta la tarifa por hora de ${r?.nombre || 'la persona responsable'} (Configuración): su mano de obra se está calculando en $0.`)
+  }
   if (config.mermaPorDefecto == null) av.add('Falta el % de merma por defecto (Configuración).')
   if (!n(config.pedidosEstimadosMes) && totalCostosFijos(config) > 0)
     av.add('Faltan los pedidos estimados al mes: los costos fijos no se están repartiendo.')
@@ -220,3 +236,67 @@ export function consumoPedido(items, config) {
 
 export const totalAbonos = (pedido) => (pedido.abonos || []).reduce((s, a) => s + n(a.monto), 0)
 export const saldoPedido = (pedido) => n(pedido.total) - totalAbonos(pedido)
+
+// ---------- Costo incompleto ----------
+/** Datos de costo que faltan (no es lo mismo que un costo cero confirmado). */
+export function faltantesDeCosto(cot, { productos, activos, config }) {
+  const f = new Set()
+  for (const it of cot.items || []) {
+    for (const m of it.materiales || []) {
+      const p = productos.find((x) => x.id === Number(m.productoId))
+      if (p && !n(p.costoPromedio)) f.add(`Material sin costo: ${p.nombre}`)
+    }
+    for (const m of it.maquinas || []) {
+      const a = activos.find((x) => x.id === Number(m.activoId))
+      if (a && n(m.minutos) && !n(a.horasUsoMes)) f.add(`Máquina sin costo por hora: ${a.nombre}`)
+    }
+    const r = responsable(it, config)
+    if ((n(it.minutosDiseno) || n(it.minutosProduccion)) && !n(r?.tarifaHora)) f.add(`Sin tarifa por hora: ${r?.nombre}`)
+  }
+  return [...f]
+}
+
+// ---------- Reparto de utilidades ----------
+/**
+ * regla: { destinos: [{ tipo: 'reinversion' | 'persona', personaId, pct }] } — los % suman 100.
+ * La utilidad ya descuenta materiales, máquinas, mano de obra y costos fijos.
+ * Devuelve montos con centavos conservados (el último destino con % absorbe el redondeo).
+ */
+export function validarRegla(regla) {
+  const ds = regla?.destinos || []
+  if (!ds.length) return 'No hay regla de reparto.'
+  if (ds.some((d) => d.pct == null || d.pct === '')) return 'Faltan porcentajes en la regla de reparto.'
+  if (ds.some((d) => n(d.pct) < 0)) return 'Hay porcentajes negativos.'
+  const suma = ds.reduce((s, d) => s + n(d.pct), 0)
+  if (Math.abs(suma - 100) > 0.001) return `Los porcentajes suman ${redondear(suma, 2)} %, deben sumar 100 %.`
+  return null
+}
+
+export function repartir(utilidad, regla) {
+  const error = validarRegla(regla)
+  if (error) return { valido: false, motivo: error, destinos: [] }
+  const u = redondear(utilidad, 2)
+  if (!(u > 0)) return { valido: false, motivo: u < 0 ? 'Hay pérdida: no hay utilidad para repartir.' : 'No hay utilidad para repartir.', destinos: [] }
+  const ds = regla.destinos.map((d) => ({ ...d, monto: Math.floor(u * n(d.pct)) / 100 }))
+  const resto = redondear(u - ds.reduce((s, d) => s + d.monto, 0), 2)
+  const ultimo = [...ds].reverse().find((d) => n(d.pct) > 0)
+  if (ultimo) ultimo.monto = redondear(ultimo.monto + resto, 2)
+  return { valido: true, utilidad: u, destinos: ds }
+}
+
+/** Mano de obra de un pedido por persona (de la copia guardada al crear el pedido). */
+export function manoObraPorPersona(pedido) {
+  const m = new Map()
+  for (const pr of pedido.precios || []) {
+    if (pr.manoObra == null) continue
+    const k = pr.personaId ?? 0
+    m.set(k, (m.get(k) || 0) + n(pr.manoObra))
+  }
+  return m
+}
+
+/** Utilidad del pedido después de costos y mano de obra (sin envío, recargos ni IVA). */
+export function utilidadPedido(pedido) {
+  const precios = pedido.precios || []
+  return precios.reduce((s, x) => s + n(x.precio) - n(x.costo), 0)
+}

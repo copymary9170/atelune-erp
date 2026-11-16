@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db.js'
+import { db, codigoPedido } from '../db.js'
 import { Campo, Modal, Selector, SelectorPago, useConfig } from '../components/ui.jsx'
 import { CATEGORIAS_GASTO } from '../lib/contabilidad.js'
-import { n } from '../lib/calc.js'
+import { n, personas } from '../lib/calc.js'
 import { usd, bs, fecha, hoy } from '../lib/format.js'
 
 export const TIPOS_GASTO = {
   gasto: 'Gasto del negocio',
   pago_proveedor: 'Pago a proveedor (deuda)',
+  pago_mano_obra: 'Pago de mano de obra',
+  reparto: 'Reparto de utilidades',
   retiro: 'Retiro del dueño',
   aporte: 'Aporte de capital',
 }
@@ -34,9 +36,12 @@ export default function Gastos() {
   const [editando, setEditando] = useState(null)
 
   const delMes = gastos.filter((g) => !mes || g.fecha?.startsWith(mes))
-  const soloGastos = delMes.filter((g) => g.tipo === 'gasto')
+  const soloGastos = delMes.filter((g) => g.tipo === 'gasto' || g.tipo === 'pago_mano_obra')
   const porCategoria = new Map()
-  for (const g of soloGastos) porCategoria.set(g.categoria, (porCategoria.get(g.categoria) || 0) + n(g.monto))
+  for (const g of soloGastos) {
+    const cat = g.tipo === 'pago_mano_obra' ? 'Mano de obra' : g.categoria
+    porCategoria.set(cat, (porCategoria.get(cat) || 0) + n(g.monto))
+  }
   const deudas = [...porPagarPorProveedor(movimientos, gastos)].filter(([, v]) => Math.abs(v) > 0.004)
   const nombreProv = (id) => proveedores.find((p) => p.id === id)?.nombre ?? 'Sin proveedor'
 
@@ -79,7 +84,7 @@ export default function Gastos() {
               <tr key={g.id} className="clic" onClick={() => setEditando(g)}>
                 <td>{fecha(g.fecha)}</td>
                 <td><span className="etiqueta-tipo">{TIPOS_GASTO[g.tipo]}</span></td>
-                <td>{g.tipo === 'gasto' && <strong>{g.categoria}</strong>} {g.descripcion}{g.proveedorId ? <div className="desglose">{nombreProv(g.proveedorId)}</div> : null}</td>
+                <td>{g.tipo === 'gasto' && <strong>{g.categoria}</strong>}{g.personaNombre && <strong>{g.personaNombre}</strong>} {g.descripcion}{g.proveedorId ? <div className="desglose">{nombreProv(g.proveedorId)}</div> : null}</td>
                 <td>{g.pagadoCon === 'credito' ? <span className="pendiente">a crédito</span> : g.pagadoCon || 'aporte propio'}</td>
                 <td className="num">{usd(g.monto)}{n(g.tasa) > 0 && <div className="desglose">{bs(n(g.monto) * n(g.tasa))}</div>}</td>
               </tr>
@@ -94,19 +99,29 @@ export default function Gastos() {
   )
 }
 
-function GastoForm({ inicial, config, proveedores, onCerrar }) {
+export function GastoForm({ inicial, config, proveedores, onCerrar }) {
   const [g, setG] = useState(inicial)
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }))
   const nuevo = !inicial.id
   const metodos = config.metodosPago || []
   const categorias = config.categoriasGasto || CATEGORIAS_GASTO
+  const pedidos = useLiveQuery(() => db.pedidos.orderBy('numero').reverse().toArray(), [], [])
+  const aPersona = g.tipo === 'pago_mano_obra' || g.tipo === 'reparto'
 
   async function guardar() {
     if (!(n(g.monto) > 0)) return alert('Escribe el monto en $.')
     if (!g.fecha) return alert('Escribe la fecha.')
     if (g.tipo !== 'gasto' && (!g.pagadoCon || g.pagadoCon === 'credito')) return alert('Elige con qué método se pagó.')
     if (g.tipo === 'pago_proveedor' && !g.proveedorId) return alert('Elige el proveedor.')
-    const datos = { ...g, proveedorId: g.proveedorId ? Number(g.proveedorId) : null }
+    if (aPersona && !g.personaId) return alert('Elige la persona.')
+    const persona = personas(config).find((p) => p.id === Number(g.personaId))
+    const datos = {
+      ...g,
+      proveedorId: g.proveedorId ? Number(g.proveedorId) : null,
+      personaId: aPersona ? Number(g.personaId) : null,
+      personaNombre: aPersona ? persona?.nombre ?? '' : null,
+      pedidoId: aPersona && g.pedidoId ? Number(g.pedidoId) : null,
+    }
     if (datos.tipo !== 'gasto') delete datos.categoria
     await db.gastos.put(datos)
     onCerrar()
@@ -124,6 +139,14 @@ function GastoForm({ inicial, config, proveedores, onCerrar }) {
       {(g.tipo === 'gasto' || g.tipo === 'pago_proveedor') && (
         <Selector label="Proveedor" valor={g.proveedorId ?? ''} onCambio={(v) => set('proveedorId', v)}
           vacio={g.tipo === 'gasto' ? 'Ninguno' : 'Elegir…'} opciones={proveedores.map((p) => ({ value: p.id, label: p.nombre }))} />
+      )}
+      {aPersona && (
+        <div className="fila">
+          <Selector label="Persona" valor={g.personaId ?? ''} onCambio={(v) => set('personaId', v)} vacio="Elegir…"
+            opciones={personas(config).map((p) => ({ value: p.id, label: p.nombre }))} />
+          <Selector label="Pedido (opcional)" valor={g.pedidoId ?? ''} onCambio={(v) => set('pedidoId', v)} vacio="General / varios pedidos"
+            opciones={pedidos.map((p) => ({ value: p.id, label: codigoPedido(p.numero) + (p.cliente ? ' · ' + p.cliente : '') }))} />
+        </div>
       )}
       <Campo label="Descripción" valor={g.descripcion} onCambio={(v) => set('descripcion', v)} placeholder="Ej.: recibo de noviembre, factura N.º…" />
       <div className="fila">

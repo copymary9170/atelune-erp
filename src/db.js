@@ -1,5 +1,5 @@
 import Dexie from 'dexie'
-import { aplicarMovimiento, calcularCotizacion, consumoPedido } from './lib/calc.js'
+import { aplicarMovimiento, calcularCotizacion, consumoPedido, faltantesDeCosto, personas } from './lib/calc.js'
 
 // Base de datos local (IndexedDB, dentro del navegador).
 // Toda la lógica de datos pasa por este archivo para poder migrar
@@ -162,6 +162,12 @@ export const ESTADOS_PEDIDO = {
   cancelado: 'Cancelado',
 }
 // A partir de estos estados los materiales ya se usaron.
+/** Regla general de reparto (los % quedan pendientes hasta que la usuaria los defina). */
+export function reglaGeneral(config) {
+  if (config.reparto?.destinos?.length) return config.reparto
+  return { destinos: [{ tipo: 'reinversion', pct: null }, ...personas(config).map((p) => ({ tipo: 'persona', personaId: p.id, pct: null }))] }
+}
+
 export const ESTADOS_CON_CONSUMO = ['en_produccion', 'listo', 'entregado']
 
 export const codigoPedido = (num) => 'PED-' + String(num).padStart(4, '0')
@@ -174,11 +180,8 @@ export async function crearPedidoDesdeCotizacion(cotId) {
     const existente = await db.pedidos.where('cotizacionId').equals(cotId).first()
     if (existente) return existente.id
     const config = await getConfig()
-    const calc = calcularCotizacion(cot, {
-      productos: await db.productos.toArray(),
-      activos: await db.activos.toArray(),
-      config,
-    })
+    const datosCalc = { productos: await db.productos.toArray(), activos: await db.activos.toArray(), config }
+    const calc = calcularCotizacion(cot, datosCalc)
     const ultimo = await db.pedidos.orderBy('numero').last()
     const hoyIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
     const id = await db.pedidos.add({
@@ -191,7 +194,10 @@ export async function crearPedidoDesdeCotizacion(cotId) {
       cliente: cot.cliente,
       contactoCliente: cot.contactoCliente,
       items: structuredClone(cot.items),
-      precios: calc.renglones.map((r) => ({ precio: r.precio, precioUnitario: r.precioUnitario, costo: r.costo })),
+      precios: calc.renglones.map((r) => ({ precio: r.precio, precioUnitario: r.precioUnitario, costo: r.costo, manoObra: r.manoObra, personaId: r.personaId })),
+      // Regla de reparto congelada al crear el pedido: cambiar la regla general no altera pedidos anteriores.
+      reparto: structuredClone(reglaGeneral(config)),
+      costoIncompleto: faltantesDeCosto(cot, datosCalc),
       total: calc.total,
       subtotal: calc.subtotal,
       envio: calc.envio,

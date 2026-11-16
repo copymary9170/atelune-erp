@@ -48,9 +48,17 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 3. Crear la usuaria en Supabase → Authentication → Users → Add user (con «Auto Confirm») y desactivar los registros nuevos (Authentication → Sign In / Providers → «Allow new users to sign up»).
 4. Volver a desplegar en Vercel.
 
+### Etapa 5: personas, mano de obra y reparto de utilidades
+
+- **Personas** con su tarifa por hora; cada trabajo tiene una persona responsable y su mano de obra se descuenta como costo antes de la utilidad.
+- **Regla general de reparto** (reinversión + % por persona, debe sumar 100 %). Cada pedido congela la regla al crearse y puede tener una regla propia (p. ej. 40/60/0) sin cambiar la general ni otros pedidos.
+- **Costo incompleto ≠ costo cero**: la cotización y el pedido muestran qué dato falta; el reparto queda «provisional».
+- **Pagos de mano de obra** (gasto) y **reparto de utilidades** (reduce patrimonio) con su asiento; pantalla de reparto por persona y por pedido.
+- Probado con el caso Natalia del documento CopyMary: materiales USD 2,92 + mano de obra USD 5 = 7,92; con venta de 15, utilidad 7,08 → reinversión 2,83 y Mary 4,25.
+
 ## Próximas etapas
 
-Reportes de rentabilidad.
+Reparto automático del delivery entre materiales · Caja y arqueo · Duplicar cotizaciones y escalas por cantidad · Reportes de rentabilidad.
 
 ## Dónde se guardan los datos
 
