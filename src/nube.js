@@ -7,9 +7,10 @@ import { crearSincronizador } from './lib/sincronizador.js'
 
 // Vercel + Supabase crea estas variables. Solo se leen la URL y la clave pública (anon):
 // la seguridad la dan las políticas RLS de la tabla (cada usuaria solo ve su fila).
-const env = import.meta.env
-const URL = env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL
-const CLAVE = env.VITE_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+// Los valores los inyecta vite.config.js al compilar (solo URL y clave pública).
+/* global __SUPABASE_URL__, __SUPABASE_CLAVE__ */
+const URL = __SUPABASE_URL__
+const CLAVE = __SUPABASE_CLAVE__
 
 export const nubeConfigurada = Boolean(URL && CLAVE)
 export const supabase = nubeConfigurada ? createClient(URL, CLAVE, { auth: { persistSession: true, autoRefreshToken: true } }) : null

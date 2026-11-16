@@ -43,7 +43,7 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 
 #### Configuración
 
-1. Crear la base Supabase desde Vercel (Storage → Supabase). La integración crea `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` (también se aceptan `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`). Solo se exponen variables `VITE_*` y `NEXT_PUBLIC_*`; las claves secretas nunca llegan al navegador.
+1. Crear la base Supabase desde Vercel (Storage → Supabase). `vite.config.js` toma solo la URL y la clave pública (`…SUPABASE_URL` y `…SUPABASE_ANON_KEY` o `…SUPABASE_PUBLISHABLE_KEY`, con cualquier prefijo); las claves secretas nunca llegan al navegador.
 2. Ejecutar `supabase/esquema.sql` en el SQL Editor de Supabase.
 3. Crear la usuaria en Supabase → Authentication → Users → Add user (con «Auto Confirm») y desactivar los registros nuevos (Authentication → Sign In / Providers → «Allow new users to sign up»).
 4. Volver a desplegar en Vercel.
