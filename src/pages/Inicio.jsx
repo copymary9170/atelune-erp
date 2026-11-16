@@ -1,0 +1,92 @@
+import { Link } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '../db.js'
+import { useConfig, useTasa, Avisos } from '../components/ui.jsx'
+import { bajoStock } from './Inventario.jsx'
+import { codigo, ESTADOS } from './Cotizaciones.jsx'
+import { n } from '../lib/calc.js'
+import { usd, num, fecha, hoy } from '../lib/format.js'
+
+export default function Inicio() {
+  const config = useConfig()
+  const tasa = useTasa()
+  const productos = useLiveQuery(() => db.productos.toArray(), [], [])
+  const activos = useLiveQuery(() => db.activos.count(), [], 0)
+  const cots = useLiveQuery(() => db.cotizaciones.orderBy('numero').reverse().toArray(), [], [])
+
+  const mes = hoy().slice(0, 7)
+  const delMes = cots.filter((c) => c.fecha?.startsWith(mes))
+  const aprobadasMes = delMes.filter((c) => c.estado === 'aprobada')
+  const valorInv = productos.reduce((s, p) => s + Math.max(0, n(p.stock)) * n(p.costoPromedio), 0)
+  const bajos = productos.filter(bajoStock)
+
+  const pendientes = []
+  if (!n(config.tarifaHora)) pendientes.push('Tu tarifa por hora de trabajo')
+  if (config.mermaPorDefecto == null) pendientes.push('El % de merma por defecto')
+  if ((config.lineas || []).some((l) => l.margenPct == null)) pendientes.push('El margen de cada línea de servicio')
+  if (!config.costosFijos?.length) pendientes.push('Tus costos fijos mensuales')
+  if (!n(config.costoKwh)) pendientes.push('El costo de la electricidad (kWh)')
+  if (!tasa || tasa.fecha !== hoy()) pendientes.push('La tasa de cambio de hoy')
+  if (!productos.length) pendientes.push('Tus productos y materiales en Inventario')
+  if (!activos) pendientes.push('Tus máquinas en Activos')
+  const diasRespaldo = config.ultimoRespaldo ? (Date.now() - new Date(config.ultimoRespaldo)) / 864e5 : null
+
+  return (
+    <>
+      <div className="encabezado">
+        <div>
+          <h1>Hola, bienvenida a Atelune</h1>
+          <p>Resumen de hoy, {fecha(hoy())}</p>
+        </div>
+        <Link className="boton" to="/cotizaciones">Ir a cotizaciones</Link>
+      </div>
+
+      <div className="grid g4">
+        <div className="tarjeta kpi"><div className="etiqueta">Tasa del día</div><div className="valor">{tasa ? num(tasa.tasa, 2) : '—'}</div><div className="desglose">{tasa ? `Bs/$ · ${fecha(tasa.fecha)}` : 'sin cargar'}</div></div>
+        <div className="tarjeta kpi"><div className="etiqueta">Cotizaciones del mes</div><div className="valor">{delMes.length}</div><div className="desglose">{aprobadasMes.length} aprobadas</div></div>
+        <div className="tarjeta kpi"><div className="etiqueta">Aprobado este mes</div><div className="valor">{usd(aprobadasMes.reduce((s, c) => s + n(c.calculo?.total), 0))}</div><div className="desglose">ganancia estimada {usd(aprobadasMes.reduce((s, c) => s + n(c.calculo?.ganancia), 0))}</div></div>
+        <div className="tarjeta kpi"><div className="etiqueta">Valor del inventario</div><div className="valor">{usd(valorInv)}</div><div className="desglose">{productos.length} productos</div></div>
+      </div>
+
+      {pendientes.length > 0 && (
+        <div className="avisos">
+          <strong>Para que el cotizador calcule bien, falta cargar:</strong>
+          <ul>{pendientes.map((p) => <li key={p}>{p}</li>)}</ul>
+          <div style={{ marginTop: 8 }} className="acciones">
+            <Link className="boton sec" to="/configuracion">Configuración</Link>
+            <Link className="boton sec" to="/tasas">Tasa</Link>
+            <Link className="boton sec" to="/inventario">Inventario</Link>
+            <Link className="boton sec" to="/activos">Activos</Link>
+          </div>
+        </div>
+      )}
+      {(diasRespaldo == null || diasRespaldo > 7) && (productos.length > 0 || cots.length > 0) && (
+        <Avisos titulo="Respaldo" lista={[diasRespaldo == null ? 'Aún no has descargado ningún respaldo.' : `Tu último respaldo fue hace ${Math.floor(diasRespaldo)} días.`]} />
+      )}
+
+      <div className="grid g2">
+        <div className="tarjeta">
+          <h2>Stock bajo</h2>
+          {bajos.length ? (
+            <table><tbody>{bajos.map((p) => (
+              <tr key={p.id}><td>{p.nombre}</td><td className="num">{num(p.stock)} {p.unidadUso}</td><td className="num desglose">mín. {num(p.stockMinimo)}</td></tr>
+            ))}</tbody></table>
+          ) : <p className="muted">Nada por reponer.</p>}
+        </div>
+        <div className="tarjeta">
+          <h2>Últimas cotizaciones</h2>
+          {cots.length ? (
+            <table><tbody>{cots.slice(0, 6).map((c) => (
+              <tr key={c.id}>
+                <td><Link to={'/cotizaciones/' + c.id}>{codigo(c.numero)}</Link></td>
+                <td>{c.cliente || <span className="muted">sin cliente</span>}</td>
+                <td><span className="etiqueta-tipo">{ESTADOS[c.estado]}</span></td>
+                <td className="num">{usd(c.calculo?.total)}</td>
+              </tr>
+            ))}</tbody></table>
+          ) : <p className="muted">Aún no hay cotizaciones.</p>}
+        </div>
+      </div>
+    </>
+  )
+}
