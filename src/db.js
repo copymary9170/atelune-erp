@@ -69,6 +69,7 @@ export const CONFIG_INICIAL = {
   vigenciaDias: null,
   condiciones: '',
   contacto: '',
+  lema: 'Papelería creativa · Impresión · Personalización',
   metodosPago: [
     { nombre: 'Efectivo $', comisionPct: null },
     { nombre: 'Efectivo Bs', comisionPct: null },

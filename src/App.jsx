@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { nubeConfigurada, useSesion, iniciarNube, detenerNube } from './nube.js'
 import { Acceso, IndicadorNube, ConflictoNube } from './components/Nube.jsx'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
-import { Logo } from './components/ui.jsx'
+import { Logo, Marca } from './components/ui.jsx'
 import Inicio from './pages/Inicio.jsx'
 import Inventario from './pages/Inventario.jsx'
 import Activos from './pages/Activos.jsx'
@@ -65,17 +65,13 @@ function Interfaz() {
   return (
     <div className="app">
       <div className="barra-movil">
-        <button onClick={() => setAbierto(true)} aria-label="Abrir menú">☰</button>
-        <Logo size={26} /> <strong>Atelune</strong>
+        <button onClick={() => setAbierto(true)} aria-label="Abrir menú" aria-expanded={abierto}>
+          <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+        </button>
+        <Logo size={24} /> <strong>Atelune</strong>
       </div>
       <nav className={'menu' + (abierto ? ' abierto' : '')} onClick={() => setAbierto(false)}>
-        <div className="marca">
-          <Logo />
-          <div>
-            <strong>Atelune</strong>
-            <small>Administración</small>
-          </div>
-        </div>
+        <Marca />
         {MENU.map((m) =>
           m.seccion ? (
             <div className="seccion" key={m.seccion}>{m.seccion}</div>
@@ -90,6 +86,7 @@ function Interfaz() {
         {PROXIMAMENTE.map((p) => (
           <div className="proximo" key={p}>{p}</div>
         ))}
+        <div className="espaciador" />
         {nubeConfigurada && <IndicadorNube />}
       </nav>
       <ConflictoNube />

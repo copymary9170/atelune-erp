@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Logo, Modal } from './ui.jsx'
+import { Marca, Modal } from './ui.jsx'
 import { supabase, useEstadoNube, resolverConflicto, sincronizarAhora } from '../nube.js'
 import { exportarDatos } from '../db.js'
 
@@ -18,12 +18,9 @@ export function Acceso() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 20, background: 'var(--tinta)' }}>
-      <form onSubmit={entrar} className="tarjeta" style={{ width: '100%', maxWidth: 380 }}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 18 }}>
-          <div style={{ background: 'var(--tinta)', borderRadius: 10, padding: 6, display: 'flex' }}><Logo size={36} /></div>
-          <div><h1 style={{ margin: 0 }}>Atelune</h1><span className="muted">Administración</span></div>
-        </div>
+    <div className="acceso">
+      <form onSubmit={entrar} className="tarjeta">
+        <Marca size={38} />
         <div className="campo"><label>Correo</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required autoFocus /></div>
         <div className="campo"><label>Contraseña</label><input type="password" value={clave} onChange={(e) => setClave(e.target.value)} autoComplete="current-password" required /></div>
         {error && <p className="pendiente">{error}</p>}
@@ -47,8 +44,8 @@ export function IndicadorNube() {
   const { fase } = useEstadoNube()
   const [icono, texto] = TEXTO[fase] || TEXTO.inactivo
   return (
-    <button className="sec mini" onClick={() => sincronizarAhora()} title="Sincronizar ahora"
-      style={{ color: 'var(--papel)', borderColor: 'transparent', opacity: .8, whiteSpace: 'normal', textAlign: 'left', margin: '14px 6px 0' }}>
+    <button className="sec mini indicador-nube" onClick={() => sincronizarAhora()} title="Sincronizar ahora"
+      style={{ color: 'var(--papel)', borderColor: 'rgba(239,227,205,.2)', opacity: .8, whiteSpace: 'normal', textAlign: 'left' }}>
       {icono} {texto}
     </button>
   )

@@ -28,24 +28,26 @@ export default function CotizacionImprimir() {
       </div>
       <div className="documento">
         <div className="cabecera">
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <div style={{ background: 'var(--tinta)', borderRadius: 10, padding: 6, display: 'flex' }}><Logo size={46} /></div>
+          <div className="membrete">
+            <div className="marca-escudo"><Logo size={42} /></div>
             <div>
-              <h1 style={{ margin: 0 }}>{config.nombreNegocio || 'Atelune'}</h1>
+              <h1>{config.nombreNegocio || 'Atelune'}</h1>
+              {config.lema && <div className="lema">{config.lema}</div>}
               {config.contacto && <div className="muted">{config.contacto}</div>}
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <h2 style={{ margin: 0 }}>Cotización</h2>
-            <div><strong>{codigo(c.numero)}</strong></div>
+          <div className="doc-meta">
+            <h2>Cotización</h2>
+            <div className="numero">{codigo(c.numero)}</div>
             <div className="muted">{fecha(c.fecha)}</div>
           </div>
         </div>
 
-        <p>
-          <strong>Cliente:</strong> {c.cliente || '—'}
-          {c.contactoCliente && <><br /><strong>Contacto:</strong> {c.contactoCliente}</>}
-        </p>
+        <div className="doc-cliente">
+          <h4>Cliente</h4>
+          <div className="nombre">{c.cliente || '—'}</div>
+          {c.contactoCliente && <div className="muted">{c.contactoCliente}</div>}
+        </div>
 
         <table>
           <thead><tr><th>Descripción</th><th className="num">Cant.</th><th className="num">Precio unit.</th><th className="num">Importe</th></tr></thead>
@@ -73,7 +75,7 @@ export default function CotizacionImprimir() {
         </table>
 
         {c.notas && <p style={{ whiteSpace: 'pre-wrap' }}><strong>Notas:</strong> {c.notas}</p>}
-        <div style={{ marginTop: 28, borderTop: '1px solid var(--linea)', paddingTop: 12 }} className="desglose">
+        <div className="doc-pie desglose">
           {config.vigenciaDias ? <p>Cotización válida hasta el {fecha(sumarDias(c.fecha, config.vigenciaDias))}.</p> : null}
           {config.condiciones && <p style={{ whiteSpace: 'pre-wrap' }}>{config.condiciones}</p>}
         </div>

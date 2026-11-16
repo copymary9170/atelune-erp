@@ -85,7 +85,7 @@ export default function Inicio() {
         </div>
       )}
       {(diasRespaldo == null || diasRespaldo > 7) && (productos.length > 0 || cots.length > 0) && (
-        <Avisos titulo="Respaldo" lista={[diasRespaldo == null ? 'Aún no has descargado ningún respaldo.' : `Tu último respaldo fue hace ${Math.floor(diasRespaldo)} días.`]} />
+        <Avisos tono="suave" titulo="Respaldo" lista={[diasRespaldo == null ? 'Aún no has descargado ningún respaldo.' : `Tu último respaldo fue hace ${Math.floor(diasRespaldo)} días.`]} />
       )}
 
       <div className="tarjeta">
@@ -95,7 +95,7 @@ export default function Inicio() {
             <tr key={p.id}>
               <td><Link to={'/pedidos/' + p.id}>{codigoPedido(p.numero)}</Link></td>
               <td>{p.cliente}</td>
-              <td><span className="etiqueta-tipo">{ESTADOS_PEDIDO[p.estado]}</span></td>
+              <td><span className={'etiqueta-tipo' + (['en_diseno', 'en_produccion'].includes(p.estado) ? ' proceso' : p.estado === 'listo' ? ' ok' : ' neutro')}>{ESTADOS_PEDIDO[p.estado]}</span></td>
               <td className={p.fechaEntrega && p.fechaEntrega < hoy() ? 'pendiente' : ''}>{p.fechaEntrega ? fecha(p.fechaEntrega) : 'sin fecha'}</td>
               <td className="num">{saldoPedido(p) > 0.005 ? <span className="pendiente">debe {usd(saldoPedido(p))}</span> : ''}</td>
             </tr>
@@ -119,7 +119,7 @@ export default function Inicio() {
               <tr key={c.id}>
                 <td><Link to={'/cotizaciones/' + c.id}>{codigo(c.numero)}</Link></td>
                 <td>{c.cliente || <span className="muted">sin cliente</span>}</td>
-                <td><span className="etiqueta-tipo">{ESTADOS[c.estado]}</span></td>
+                <td><span className={'etiqueta-tipo' + (c.estado === 'aprobada' ? ' ok' : c.estado === 'rechazada' ? ' bajo' : c.estado === 'enviada' ? ' proceso' : ' neutro')}>{ESTADOS[c.estado]}</span></td>
                 <td className="num">{usd(c.calculo?.total)}</td>
               </tr>
             ))}</tbody></table>

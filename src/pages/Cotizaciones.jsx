@@ -57,7 +57,7 @@ export default function Cotizaciones() {
                   <td><strong>{codigo(c.numero)}</strong></td>
                   <td>{fecha(c.fecha)}</td>
                   <td>{c.cliente || <span className="muted">sin cliente</span>}</td>
-                  <td><span className={'etiqueta-tipo' + (c.estado === 'aprobada' ? ' ok' : c.estado === 'rechazada' ? ' bajo' : '')}>{ESTADOS[c.estado]}</span></td>
+                  <td><span className={'etiqueta-tipo' + (c.estado === 'aprobada' ? ' ok' : c.estado === 'rechazada' ? ' bajo' : c.estado === 'enviada' ? ' proceso' : ' neutro')}>{ESTADOS[c.estado]}</span></td>
                   <td className="num">{usd(c.calculo?.total)}</td>
                   <td className="num">{bs(c.calculo?.totalBs)}</td>
                   <td className="num">{usd(c.calculo?.ganancia)}</td>

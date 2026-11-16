@@ -1,13 +1,29 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, CONFIG_INICIAL } from '../db.js'
 
-export function Logo({ size = 34 }) {
+// Luna creciente que sostiene un libro abierto: el logo de Atelune.
+export function Logo({ size = 34, claro = true }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
-      <path d="M40 6a26 26 0 1 0 18 44A22 22 0 1 1 40 6z" fill="#b8955a" />
-      <path d="M14 30c6-3 12-3 18 1 6-4 12-4 18-1v18c-6-3-12-3-18 1-6-4-12-4-18-1z" fill="#f7f2ea" />
-      <path d="M32 31v18" stroke="#1f2a44" strokeWidth="1.5" />
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" fill="none">
+      <path d="M43 5a27 27 0 1 0 17 45A23 23 0 1 1 43 5z" fill="#b8955a" />
+      <path d="M13 29c6.5-3.2 12.5-2.8 19 1 6.5-3.8 12.5-4.2 19-1v20c-6.5-3.2-12.5-2.8-19 1-6.5-3.8-12.5-4.2-19-1z"
+        fill={claro ? '#fffdfa' : '#fffdfa'} stroke="#1d2340" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M32 30v20" stroke="#1d2340" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M19 34.5c3.5-1 6.8-.7 9.5.9M36 35.4c2.7-1.6 6-1.9 9.5-.9" stroke="#b8955a" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
+  )
+}
+
+/** Escudo + nombre, usado en el menú, el acceso y los documentos. */
+export function Marca({ size = 34, subtitulo = 'Administración' }) {
+  return (
+    <div className="marca">
+      <div className="marca-escudo"><Logo size={size} /></div>
+      <div>
+        <strong>Atelune</strong>
+        <small>{subtitulo}</small>
+      </div>
+    </div>
   )
 }
 
@@ -60,10 +76,10 @@ export function Selector({ label, valor, onCambio, opciones, vacio, className = 
   )
 }
 
-export function Avisos({ lista, titulo = 'Datos pendientes' }) {
+export function Avisos({ lista, titulo = 'Datos pendientes', tono }) {
   if (!lista?.length) return null
   return (
-    <div className="avisos">
+    <div className={'avisos' + (tono === 'suave' ? ' suave' : '')}>
       <strong>{titulo}</strong>
       <ul>
         {lista.map((a) => (

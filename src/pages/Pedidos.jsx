@@ -9,7 +9,7 @@ import { consumoPedido, saldoPedido, totalAbonos, n } from '../lib/calc.js'
 import { usd, bs, num, fecha, hoy } from '../lib/format.js'
 
 const FLUJO = ['aprobado', 'en_diseno', 'en_produccion', 'listo', 'entregado']
-const claseEstado = (e) => (e === 'entregado' ? ' ok' : e === 'cancelado' ? ' bajo' : '')
+const claseEstado = (e) => (e === 'entregado' ? ' ok' : e === 'cancelado' ? ' bajo' : ['en_diseno', 'en_produccion'].includes(e) ? ' proceso' : ' neutro')
 
 export default function Pedidos() {
   const pedidos = useLiveQuery(() => db.pedidos.orderBy('numero').reverse().toArray(), [], [])

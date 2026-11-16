@@ -111,6 +111,8 @@ export default function Configuracion() {
 
         <div className="tarjeta">
           <h2>Cotizaciones</h2>
+          <Campo label="Lema (aparece bajo el nombre en la cotización)" valor={c.lema ?? ''} onCambio={(v) => set('lema', v)}
+            placeholder="Papelería creativa · Impresión · Personalización" />
           <Campo label="IVA (%)" tipo="number" valor={c.ivaPct} onCambio={(v) => set('ivaPct', v)}
             ayuda="Solo se aplica si marcas «Aplicar IVA» en la cotización. Confírmalo con tu contador." />
           <Campo label="Vigencia de la cotización (días)" tipo="number" valor={c.vigenciaDias} onCambio={(v) => set('vigenciaDias', v)} />

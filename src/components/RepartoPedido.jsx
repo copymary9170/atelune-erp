@@ -94,7 +94,7 @@ export default function RepartoPedido({ pedido: p, config }) {
           ))}
         </tbody></table>
       ) : <p className="pendiente">{e.res.motivo}{/Faltan|suman/.test(e.res.motivo) && ' Defínela en Configuración o con «Cambiar regla de este pedido».'}</p>}
-      <Avisos titulo="Reparto provisional" lista={e.provisional} />
+      <Avisos tono="suave" titulo="Reparto provisional" lista={e.provisional} />
 
       {pagando && (
         <GastoForm config={config} proveedores={[]} onCerrar={() => setPagando(null)}

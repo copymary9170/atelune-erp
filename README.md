@@ -65,6 +65,13 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 - **Calcular tinta desde un archivo** (en cada trabajo de una cotización o plantilla): se sube una imagen o un PDF, la app mide la cobertura de cian, magenta, amarillo y negro (`src/lib/tinta.js`) y la convierte en ml con el rendimiento del fabricante configurado en *Configuración → Impresoras y tinta*. El resultado se agrega como materiales del trabajo. El archivo se analiza en el navegador; no se sube. Es una estimación por cobertura.
 - **Interfaz**: iconos en el menú, tarjetas y tablas más limpias, cuadrículas que se adaptan al ancho, mejor vista en celular.
 
+### Etapa 8: diseño
+
+- Sistema visual propio en `src/index.css` (un solo lugar para colores, formas y tipografía), alineado con la marca: tinta nocturna, papel y latón; titulares en Cormorant Garamond con Georgia de respaldo.
+- Logo redibujado (luna creciente sosteniendo un libro abierto), escudo de marca reutilizable, favicon nuevo.
+- Menú con indicador de sección activa; estados en color según su etapa; estados vacíos con el motivo de la marca; avisos con variante suave.
+- Pantalla de acceso con cielo nocturno; cotización impresa con membrete, lema editable, bloque de cliente y pie de página.
+
 ## Próximas etapas
 
 Caja y arqueo · Duplicar cotizaciones y escalas por cantidad · Reportes de rentabilidad.
