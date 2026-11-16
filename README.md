@@ -60,6 +60,11 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 
 - **Registrar compra** (Inventario): varios materiales en una sola compra; el delivery se reparte entre ellos (según lo pagado o en partes iguales) y queda dentro del costo por unidad.
 
+### Etapa 7: tinta desde archivo e interfaz
+
+- **Calcular tinta desde un archivo** (en cada trabajo de una cotización o plantilla): se sube una imagen o un PDF, la app mide la cobertura de cian, magenta, amarillo y negro (`src/lib/tinta.js`) y la convierte en ml con el rendimiento del fabricante configurado en *Configuración → Impresoras y tinta*. El resultado se agrega como materiales del trabajo. El archivo se analiza en el navegador; no se sube. Es una estimación por cobertura.
+- **Interfaz**: iconos en el menú, tarjetas y tablas más limpias, cuadrículas que se adaptan al ancho, mejor vista en celular.
+
 ## Próximas etapas
 
 Caja y arqueo · Duplicar cotizaciones y escalas por cantidad · Reportes de rentabilidad.

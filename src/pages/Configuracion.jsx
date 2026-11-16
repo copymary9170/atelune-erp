@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import PerfilesTinta from '../components/PerfilesTinta.jsx'
 import { db, exportarRespaldo, importarRespaldo, agregarDatos, reglaGeneral } from '../db.js'
 import { Campo, useConfig } from '../components/ui.jsx'
 import { totalCostosFijos, fijosPorPedido, personas as listaPersonas, validarRegla } from '../lib/calc.js'
@@ -11,6 +13,7 @@ export default function Configuracion() {
   const [c, setC] = useState(guardada)
   const [estado, setEstado] = useState('')
   const archivo = useRef()
+  const productosInv = useLiveQuery(() => db.productos.orderBy('nombre').toArray(), [], [])
   const archivoCarga = useRef()
 
   async function agregarDesdeArchivo(e) {
@@ -191,6 +194,8 @@ export default function Configuracion() {
           <button className="sec" onClick={() => agregar('metodosPago', { nombre: '', comisionPct: null })}>+ Agregar método</button>
         </div>
       </div>
+
+      <PerfilesTinta perfiles={c.perfilesTinta || []} productos={productosInv} onCambio={(v) => set('perfilesTinta', v)} />
 
       <div className="tarjeta">
         <h2>Categorías de gasto</h2>

@@ -8,12 +8,13 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node --test tests/calc.test.js tests/contabilidad.test.js tests/sincronizador.test.js"
+    "test": "node --test tests/calc.test.js tests/contabilidad.test.js tests/sincronizador.test.js tests/tinta.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5"

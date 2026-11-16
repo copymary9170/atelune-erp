@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Campo, Selector } from './ui.jsx'
+import TintaArchivo from './TintaArchivo.jsx'
 import { costoHoraActivo, n, personas } from '../lib/calc.js'
 import { usd } from '../lib/format.js'
 
@@ -9,6 +11,9 @@ export default function ItemEditor({ item, onCambio, productos, activos, config,
   const quitar = (k, i) => set(k, (item[k] || []).filter((_, j) => j !== i))
   const agregar = (k, nuevo) => set(k, [...(item[k] || []), nuevo])
   const lineas = config.lineas || []
+  const [tinta, setTinta] = useState(false)
+  // Reemplaza las tintas ya puestas (mismo producto) y agrega las nuevas.
+  const agregarTinta = (nuevos) => set('materiales', [...(item.materiales || []).filter((m) => !nuevos.some((x) => x.productoId === Number(m.productoId))), ...nuevos])
 
   return (
     <>
@@ -34,7 +39,11 @@ export default function ItemEditor({ item, onCambio, productos, activos, config,
             </div>
           )
         })}
-        <button className="sec mini" onClick={() => agregar('materiales', { productoId: '', cantidad: 1 })}>+ Material</button>
+        <div className="acciones">
+          <button className="sec mini" onClick={() => agregar('materiales', { productoId: '', cantidad: 1 })}>+ Material</button>
+          <button className="sec mini" onClick={() => setTinta(true)}>Calcular tinta desde un archivo…</button>
+        </div>
+        {tinta && <TintaArchivo productos={productos} config={config} onAgregar={agregarTinta} onCerrar={() => setTinta(false)} />}
         {!productos.length && <span className="ayuda"> Primero registra productos en Inventario.</span>}
       </div>
 
