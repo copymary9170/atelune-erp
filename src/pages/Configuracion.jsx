@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { db, exportarRespaldo, importarRespaldo } from '../db.js'
+import { db, exportarRespaldo, importarRespaldo, agregarDatos } from '../db.js'
 import { Campo, useConfig } from '../components/ui.jsx'
 import { totalCostosFijos, fijosPorPedido } from '../lib/calc.js'
 import { CATEGORIAS_GASTO } from '../lib/contabilidad.js'
@@ -11,6 +11,19 @@ export default function Configuracion() {
   const [c, setC] = useState(guardada)
   const [estado, setEstado] = useState('')
   const archivo = useRef()
+  const archivoCarga = useRef()
+
+  async function agregarDesdeArchivo(e) {
+    const f = e.target.files[0]
+    if (!f) return
+    try {
+      const r = await agregarDatos(JSON.parse(await f.text()))
+      alert(`Listo: se agregaron ${r.productos} productos y ${r.activos} equipos.` + (r.omitidos.length ? `\nYa existían (no se tocaron): ${r.omitidos.join(', ')}` : ''))
+    } catch (err) {
+      alert('No se pudo agregar: ' + err.message)
+    }
+    e.target.value = ''
+  }
 
   useEffect(() => setC(guardada), [guardada])
 
@@ -155,10 +168,13 @@ export default function Configuracion() {
             : <>Tus datos se guardan en este navegador. <strong>Descarga un respaldo con frecuencia</strong> (por ejemplo, cada semana) y guárdalo en Google Drive o en tu computadora. Si borras los datos del navegador o cambias de equipo, lo recuperas con «Restaurar».</>}
         </p>
         <p className="muted">Último respaldo: {c.ultimoRespaldo ? fecha(c.ultimoRespaldo) : 'nunca'}</p>
+        <p className="ayuda">«Restaurar» reemplaza todo. «Agregar productos y equipos» solo suma los que no existan, sin borrar nada.</p>
         <div className="acciones">
           <button onClick={descargar}>Descargar respaldo</button>
           <button className="sec" onClick={() => archivo.current.click()}>Restaurar desde archivo…</button>
           <input ref={archivo} type="file" accept="application/json" hidden onChange={restaurar} />
+          <button className="sec" onClick={() => archivoCarga.current.click()}>Agregar productos y equipos desde archivo…</button>
+          <input ref={archivoCarga} type="file" accept="application/json" hidden onChange={agregarDesdeArchivo} />
         </div>
       </div>
     </>

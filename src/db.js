@@ -251,3 +251,31 @@ export async function datosContables() {
   ])
   return { pedidos, movimientos, gastos, activos, manuales, productos, config }
 }
+
+// ---------- Agregar datos sin borrar ----------
+// Agrega productos y activos de un archivo de carga. No toca lo existente:
+// si ya hay uno con el mismo nombre, se omite. No crea movimientos de inventario
+// (las existencias se registran después con compras reales).
+export async function agregarDatos(datos) {
+  if (datos?.app !== 'atelune-erp' || datos?.tipo !== 'carga') throw new Error('El archivo no es una carga de datos de Atelune.')
+  const r = { productos: 0, activos: 0, omitidos: [] }
+  await db.transaction('rw', db.productos, db.activos, async () => {
+    const nombresP = new Set((await db.productos.toArray()).map((p) => p.nombre.trim().toLowerCase()))
+    const nombresA = new Set((await db.activos.toArray()).map((a) => a.nombre.trim().toLowerCase()))
+    for (const p of datos.productos || []) {
+      const k = p.nombre.trim().toLowerCase()
+      if (nombresP.has(k)) { r.omitidos.push(p.nombre); continue }
+      const { id, ...resto } = p
+      await db.productos.add({ ...resto, stock: 0, costoPromedio: 0 })
+      nombresP.add(k); r.productos++
+    }
+    for (const a of datos.activos || []) {
+      const k = a.nombre.trim().toLowerCase()
+      if (nombresA.has(k)) { r.omitidos.push(a.nombre); continue }
+      const { id, ...resto } = a
+      await db.activos.add(resto)
+      nombresA.add(k); r.activos++
+    }
+  })
+  return r
+}
