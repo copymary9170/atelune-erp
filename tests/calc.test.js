@@ -145,3 +145,16 @@ test('caso Natalia con datos del documento', () => {
   assert.equal(c.redondear(c.utilidadPedido(pedido), 2), 7.08)
   assert.equal(c.manoObraPorPersona(pedido).get(1), 5)
 })
+
+test('reparto del delivery entre materiales de una compra', () => {
+  // Caso Natalia: dos pliegos de $2 y $2 de delivery → $3 cada uno.
+  assert.deepEqual(c.repartirDelivery([2, 2], 2), [1, 1])
+  // Proporcional al costo, conservando centavos.
+  const p = c.repartirDelivery([25, 17, 6], 4)
+  assert.equal(c.redondear(p.reduce((s, x) => s + x, 0), 2), 4)
+  assert.equal(p[0], 2.08)
+  assert.deepEqual(c.repartirDelivery([10, 30], 3, 'igual'), [1.5, 1.5])
+  assert.deepEqual(c.repartirDelivery([5, 5], 0), [0, 0])
+  assert.deepEqual(c.repartirDelivery([0, 0], 1), [0.5, 0.5]) // sin costos: partes iguales
+  assert.equal(c.redondear(c.repartirDelivery([1, 1, 1], 1).reduce((s, x) => s + x, 0), 2), 1)
+})

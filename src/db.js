@@ -285,3 +285,15 @@ export async function agregarDatos(datos) {
   })
   return r
 }
+
+// ---------- Compra de varios materiales ----------
+/** lineas: [{ productoId, cantidadUso, costoTotal }] con el delivery ya incluido en costoTotal. */
+export async function registrarCompra({ lineas, fecha, proveedorId, pagadoCon, referencia, nota }) {
+  return db.transaction('rw', db.productos, db.movimientos, async () => {
+    for (const l of lineas)
+      await registrarMovimiento({
+        productoId: l.productoId, tipo: 'entrada', cantidad: l.cantidadUso, costoUnitario: l.costoTotal / l.cantidadUso,
+        fecha, proveedorId, pagadoCon, referencia, nota,
+      })
+  })
+}

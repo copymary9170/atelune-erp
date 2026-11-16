@@ -300,3 +300,21 @@ export function utilidadPedido(pedido) {
   const precios = pedido.precios || []
   return precios.reduce((s, x) => s + n(x.precio) - n(x.costo), 0)
 }
+
+// ---------- Compras con delivery ----------
+/**
+ * Reparte el delivery (u otro gasto común de la compra) entre las líneas.
+ * modo 'costo': proporcional a lo pagado por cada línea; 'igual': partes iguales.
+ * Conserva los centavos: la última línea absorbe el redondeo.
+ */
+export function repartirDelivery(costos, delivery, modo = 'costo') {
+  const d = redondear(delivery, 2)
+  const cs = costos.map((c) => n(c))
+  if (!cs.length) return []
+  if (!(d > 0)) return cs.map(() => 0)
+  const total = cs.reduce((s, c) => s + c, 0)
+  const igual = modo === 'igual' || !(total > 0)
+  const partes = cs.map((c) => Math.floor((igual ? d / cs.length : (d * c) / total) * 100) / 100)
+  partes[partes.length - 1] = redondear(partes[partes.length - 1] + d - partes.reduce((s, x) => s + x, 0), 2)
+  return partes
+}

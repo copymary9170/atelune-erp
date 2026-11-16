@@ -56,9 +56,13 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 - **Pagos de mano de obra** (gasto) y **reparto de utilidades** (reduce patrimonio) con su asiento; pantalla de reparto por persona y por pedido.
 - Probado con el caso Natalia del documento CopyMary: materiales USD 2,92 + mano de obra USD 5 = 7,92; con venta de 15, utilidad 7,08 → reinversión 2,83 y Mary 4,25.
 
+### Etapa 6: compras con delivery
+
+- **Registrar compra** (Inventario): varios materiales en una sola compra; el delivery se reparte entre ellos (según lo pagado o en partes iguales) y queda dentro del costo por unidad.
+
 ## Próximas etapas
 
-Reparto automático del delivery entre materiales · Caja y arqueo · Duplicar cotizaciones y escalas por cantidad · Reportes de rentabilidad.
+Caja y arqueo · Duplicar cotizaciones y escalas por cantidad · Reportes de rentabilidad.
 
 ## Dónde se guardan los datos
 
