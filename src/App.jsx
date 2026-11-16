@@ -10,21 +10,26 @@ import CotizacionImprimir from './pages/CotizacionImprimir.jsx'
 import Plantillas from './pages/Plantillas.jsx'
 import Tasas from './pages/Tasas.jsx'
 import Configuracion from './pages/Configuracion.jsx'
+import Pedidos, { PedidoDetalle } from './pages/Pedidos.jsx'
+import Contactos from './pages/Contactos.jsx'
 
 const MENU = [
   { to: '/', label: 'Inicio', end: true },
   { seccion: 'Ventas' },
   { to: '/cotizaciones', label: 'Cotizaciones' },
+  { to: '/pedidos', label: 'Pedidos y producción' },
+  { to: '/clientes', label: 'Clientes' },
   { to: '/plantillas', label: 'Plantillas de trabajo' },
   { seccion: 'Operación' },
   { to: '/inventario', label: 'Inventario' },
   { to: '/activos', label: 'Activos y máquinas' },
+  { to: '/proveedores', label: 'Proveedores' },
   { seccion: 'Ajustes' },
   { to: '/tasas', label: 'Tasa de cambio' },
   { to: '/configuracion', label: 'Configuración y respaldo' },
 ]
 
-const PROXIMAMENTE = ['Pedidos y producción', 'Clientes y proveedores', 'Libro diario y mayor', 'Estados financieros', 'Reportes']
+const PROXIMAMENTE = ['Gastos', 'Libro diario y mayor', 'Estados financieros', 'Reportes']
 
 export default function App() {
   const [abierto, setAbierto] = useState(false)
@@ -69,6 +74,10 @@ export default function App() {
           <Route path="/cotizaciones" element={<Cotizaciones />} />
           <Route path="/cotizaciones/:id" element={<CotizacionEditor />} />
           <Route path="/plantillas" element={<Plantillas />} />
+          <Route path="/pedidos" element={<Pedidos />} />
+          <Route path="/pedidos/:id" element={<PedidoDetalle />} />
+          <Route path="/clientes" element={<Contactos tipo="clientes" key="clientes" />} />
+          <Route path="/proveedores" element={<Contactos tipo="proveedores" key="proveedores" />} />
           <Route path="/tasas" element={<Tasas />} />
           <Route path="/configuracion" element={<Configuracion />} />
         </Routes>

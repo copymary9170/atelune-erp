@@ -197,3 +197,26 @@ export function avisosCotizacion(cot, { productos, activos, config }) {
   }
   return [...av]
 }
+
+// ---------- Pedidos ----------
+/**
+ * Materiales que consume un pedido (cantidad × uso por unidad), agrupados por producto.
+ * La merma se cobra en el precio, pero no se descuenta del inventario por adelantado:
+ * el desperdicio real se registra como movimiento de «Merma» (así 2 tazas descuentan 2, no 2,2).
+ */
+// eslint-disable-next-line no-unused-vars
+export function consumoPedido(items, config) {
+  const mapa = new Map()
+  for (const it of items || []) {
+    for (const m of it.materiales || []) {
+      if (!m.productoId) continue
+      const id = Number(m.productoId)
+      const c = n(m.cantidad) * n(it.cantidad)
+      mapa.set(id, (mapa.get(id) || 0) + c)
+    }
+  }
+  return [...mapa].map(([productoId, cantidad]) => ({ productoId, cantidad })).filter((x) => x.cantidad > 0)
+}
+
+export const totalAbonos = (pedido) => (pedido.abonos || []).reduce((s, a) => s + n(a.monto), 0)
+export const saldoPedido = (pedido) => n(pedido.total) - totalAbonos(pedido)

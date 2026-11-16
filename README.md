@@ -2,7 +2,9 @@
 
 Aplicación web para administrar Atelune: papelería creativa, impresión, impresión 3D, impresión comestible, sublimación (incluida neón), grabado láser, vinil, manualidades y diseño.
 
-## Qué incluye (etapa 1)
+## Qué incluye
+
+### Etapa 1
 
 - **Cotizador automático**: suma materiales (con merma), uso de máquinas, mano de obra, otros costos y costos fijos prorrateados; aplica el margen por línea de servicio, los descuentos, el envío, la comisión del método de pago y el IVA. Muestra el total en $ y en Bs, y la cotización se puede imprimir o guardar como PDF.
 - **Plantillas de trabajo**: la «receta» de cada trabajo que se repite, para cotizarlo en segundos.
@@ -11,9 +13,17 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 - **Tasa de cambio** diaria (Bs/$).
 - **Configuración** y **respaldo** (descargar y restaurar).
 
+### Etapa 2
+
+- **Pedidos y producción**: una cotización se convierte en pedido con un clic. Estados: aprobado → en diseño → en producción → listo → entregado (o cancelado). Fecha de entrega con aviso de atraso y notas de producción.
+- **Descuento automático del inventario** al pasar a producción. Si se cancela, los materiales vuelven al inventario. La merma se cobra en el precio, pero el desperdicio real se registra a mano como movimiento de «Merma».
+- **Pagos y abonos** por pedido (con método y tasa), saldo pendiente y vista «Por cobrar».
+- **Clientes** con su historial de cotizaciones y pedidos y lo que deben; se pueden elegir o crear desde la cotización.
+- **Proveedores**: las entradas de inventario se asocian a un proveedor y queda el historial de compras.
+
 ## Próximas etapas
 
-Pedidos y producción · Clientes y proveedores · Libro diario y libro mayor · Estados financieros · Reportes · Base de datos en la nube con inicio de sesión.
+Gastos · Libro diario y libro mayor (asientos automáticos) · Estados financieros · Reportes · Base de datos en la nube con inicio de sesión.
 
 ## Dónde se guardan los datos
 

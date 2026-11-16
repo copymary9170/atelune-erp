@@ -179,6 +179,8 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
   const [f, setF] = useState(hoy())
   const [referencia, setReferencia] = useState('')
   const [nota, setNota] = useState('')
+  const [proveedorId, setProveedorId] = useState('')
+  const proveedores = useLiveQuery(() => db.proveedores.orderBy('nombre').toArray(), [], [])
   const factor = n(p.factor) || 1
   const cantUso = tipo === 'entrada' && unidad === 'compra' ? n(cantidad) * factor : n(cantidad)
 
@@ -190,6 +192,7 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
       productoId: p.id, tipo, cantidad: cantUso,
       costoUnitario: tipo === 'entrada' ? n(costoTotal) / cantUso : undefined,
       fecha: f, referencia, nota,
+      proveedorId: tipo === 'entrada' && proveedorId ? Number(proveedorId) : null,
     })
     onCerrar()
   }
@@ -212,7 +215,11 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
       {tipo === 'entrada' && cantUso > 0 && costoTotal != null && (
         <p className="ayuda">= {num(cantUso)} {p.unidadUso} a {usd(n(costoTotal) / cantUso)} c/u</p>
       )}
-      <Campo label="Referencia" valor={referencia} onCambio={setReferencia} placeholder="Factura, proveedor, pedido…" />
+      {tipo === 'entrada' && (
+        <Selector label="Proveedor" valor={proveedorId} onCambio={setProveedorId} vacio={proveedores.length ? 'Sin proveedor' : 'Aún no hay proveedores registrados'}
+          opciones={proveedores.map((x) => ({ value: x.id, label: x.nombre }))} />
+      )}
+      <Campo label="Referencia" valor={referencia} onCambio={setReferencia} placeholder="N.º de factura, nota de entrega…" />
       <Campo label="Nota" valor={nota} onCambio={setNota} />
       <div className="modal-pie">
         <button className="sec" onClick={onCerrar}>Cancelar</button>

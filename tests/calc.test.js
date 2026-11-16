@@ -76,3 +76,22 @@ test('avisos por datos pendientes', () => {
   assert.ok(av.some((a) => a.includes('Impresión')))
   assert.ok(av.some((a) => a.includes('tasa')))
 })
+
+test('consumo de materiales de un pedido', () => {
+  const items = [
+    { cantidad: 2, mermaPct: 10, materiales: [{ productoId: 1, cantidad: 1 }, { productoId: 2, cantidad: 3 }] },
+    { cantidad: 1, materiales: [{ productoId: 1, cantidad: 2 }, { productoId: '', cantidad: 5 }] },
+  ]
+  const r = c.consumoPedido(items, { mermaPorDefecto: 0 })
+  const p1 = r.find((x) => x.productoId === 1).cantidad
+  const p2 = r.find((x) => x.productoId === 2).cantidad
+  assert.equal(c.redondear(p1, 4), 4) // 2*1 + 2 (la merma no se descuenta por adelantado)
+  assert.equal(c.redondear(p2, 4), 6)
+  assert.equal(r.length, 2)
+})
+
+test('saldo de pedido', () => {
+  const p = { total: 50, abonos: [{ monto: 20 }, { monto: 10 }] }
+  assert.equal(c.totalAbonos(p), 30)
+  assert.equal(c.saldoPedido(p), 20)
+})

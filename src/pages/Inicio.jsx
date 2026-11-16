@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db.js'
+import { db, ESTADOS_PEDIDO, codigoPedido } from '../db.js'
 import { useConfig, useTasa, Avisos } from '../components/ui.jsx'
 import { bajoStock } from './Inventario.jsx'
 import { codigo, ESTADOS } from './Cotizaciones.jsx'
-import { n } from '../lib/calc.js'
+import { n, saldoPedido } from '../lib/calc.js'
 import { usd, num, fecha, hoy } from '../lib/format.js'
 
 export default function Inicio() {
@@ -12,6 +12,7 @@ export default function Inicio() {
   const tasa = useTasa()
   const productos = useLiveQuery(() => db.productos.toArray(), [], [])
   const activos = useLiveQuery(() => db.activos.count(), [], 0)
+  const pedidos = useLiveQuery(() => db.pedidos.toArray(), [], [])
   const cots = useLiveQuery(() => db.cotizaciones.orderBy('numero').reverse().toArray(), [], [])
 
   const mes = hoy().slice(0, 7)
@@ -20,6 +21,9 @@ export default function Inicio() {
   const valorInv = productos.reduce((s, p) => s + Math.max(0, n(p.stock)) * n(p.costoPromedio), 0)
   const bajos = productos.filter(bajoStock)
 
+  const activosPed = pedidos.filter((p) => !['entregado', 'cancelado'].includes(p.estado))
+    .sort((a, b) => (a.fechaEntrega || '9999') < (b.fechaEntrega || '9999') ? -1 : 1)
+  const porCobrar = pedidos.filter((p) => p.estado !== 'cancelado').reduce((s, p) => s + Math.max(0, saldoPedido(p)), 0)
   const pendientes = []
   if (!n(config.tarifaHora)) pendientes.push('Tu tarifa por hora de trabajo')
   if (config.mermaPorDefecto == null) pendientes.push('El % de merma por defecto')
@@ -43,8 +47,8 @@ export default function Inicio() {
 
       <div className="grid g4">
         <div className="tarjeta kpi"><div className="etiqueta">Tasa del día</div><div className="valor">{tasa ? num(tasa.tasa, 2) : '—'}</div><div className="desglose">{tasa ? `Bs/$ · ${fecha(tasa.fecha)}` : 'sin cargar'}</div></div>
-        <div className="tarjeta kpi"><div className="etiqueta">Cotizaciones del mes</div><div className="valor">{delMes.length}</div><div className="desglose">{aprobadasMes.length} aprobadas</div></div>
-        <div className="tarjeta kpi"><div className="etiqueta">Aprobado este mes</div><div className="valor">{usd(aprobadasMes.reduce((s, c) => s + n(c.calculo?.total), 0))}</div><div className="desglose">ganancia estimada {usd(aprobadasMes.reduce((s, c) => s + n(c.calculo?.ganancia), 0))}</div></div>
+        <div className="tarjeta kpi"><div className="etiqueta">Pedidos pendientes</div><div className="valor">{activosPed.length}</div><div className="desglose">{delMes.length} cotizaciones este mes · {aprobadasMes.length} aprobadas</div></div>
+        <div className="tarjeta kpi"><div className="etiqueta">Por cobrar</div><div className="valor">{usd(porCobrar)}</div><div className="desglose">saldos de pedidos</div></div>
         <div className="tarjeta kpi"><div className="etiqueta">Valor del inventario</div><div className="valor">{usd(valorInv)}</div><div className="desglose">{productos.length} productos</div></div>
       </div>
 
@@ -63,6 +67,21 @@ export default function Inicio() {
       {(diasRespaldo == null || diasRespaldo > 7) && (productos.length > 0 || cots.length > 0) && (
         <Avisos titulo="Respaldo" lista={[diasRespaldo == null ? 'Aún no has descargado ningún respaldo.' : `Tu último respaldo fue hace ${Math.floor(diasRespaldo)} días.`]} />
       )}
+
+      <div className="tarjeta">
+        <h2>Próximas entregas</h2>
+        {activosPed.length ? (
+          <table><tbody>{activosPed.slice(0, 8).map((p) => (
+            <tr key={p.id}>
+              <td><Link to={'/pedidos/' + p.id}>{codigoPedido(p.numero)}</Link></td>
+              <td>{p.cliente}</td>
+              <td><span className="etiqueta-tipo">{ESTADOS_PEDIDO[p.estado]}</span></td>
+              <td className={p.fechaEntrega && p.fechaEntrega < hoy() ? 'pendiente' : ''}>{p.fechaEntrega ? fecha(p.fechaEntrega) : 'sin fecha'}</td>
+              <td className="num">{saldoPedido(p) > 0.005 ? <span className="pendiente">debe {usd(saldoPedido(p))}</span> : ''}</td>
+            </tr>
+          ))}</tbody></table>
+        ) : <p className="muted">No hay pedidos pendientes.</p>}
+      </div>
 
       <div className="grid g2">
         <div className="tarjeta">

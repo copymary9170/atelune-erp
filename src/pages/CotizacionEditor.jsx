@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, tasaVigente } from '../db.js'
+import { db, tasaVigente, crearPedidoDesdeCotizacion, codigoPedido } from '../db.js'
 import { Avisos, Campo, Selector } from '../components/ui.jsx'
 import ItemEditor, { itemVacio } from '../components/ItemEditor.jsx'
 import { useDatosCalculo } from './Plantillas.jsx'
@@ -24,6 +24,8 @@ export default function CotizacionEditor() {
   const guardada = useLiveQuery(() => db.cotizaciones.get(Number(id)).then((x) => x ?? null), [id])
   const plantillas = useLiveQuery(() => db.plantillas.orderBy('nombre').toArray(), [], [])
   const datos = useDatosCalculo()
+  const clientes = useLiveQuery(() => db.clientes.orderBy('nombre').toArray(), [], [])
+  const pedido = useLiveQuery(() => db.pedidos.where('cotizacionId').equals(Number(id)).first(), [id])
   const [c, setC] = useState(null)
   const [abierto, setAbierto] = useState(0)
   const [aviso, setAviso] = useState('')
@@ -55,6 +57,30 @@ export default function CotizacionEditor() {
     if (siguiente) navigate(siguiente)
   }
 
+  async function convertirEnPedido() {
+    if (!c.items.length) return
+    await db.cotizaciones.put({ ...c, calculo: resumenCalculo(r) })
+    if (!confirm('Se creará un pedido con estos trabajos y precios, y la cotización quedará como aprobada. ¿Continuar?')) return
+    const pid = await crearPedidoDesdeCotizacion(c.id)
+    navigate('/pedidos/' + pid)
+  }
+
+  function elegirCliente(v) {
+    const cl = clientes.find((x) => x.id === Number(v))
+    setC((x) => ({
+      ...x,
+      clienteId: cl ? cl.id : null,
+      cliente: cl ? cl.nombre : x.cliente,
+      contactoCliente: cl ? [cl.telefono, cl.instagram].filter(Boolean).join(' · ') : x.contactoCliente,
+    }))
+  }
+
+  async function guardarClienteNuevo() {
+    if (!c.cliente?.trim()) return alert('Escribe primero el nombre del cliente.')
+    const cid = await db.clientes.add({ nombre: c.cliente.trim(), telefono: c.contactoCliente || '' })
+    setC((x) => ({ ...x, clienteId: cid }))
+  }
+
   async function usarTasaDelDia() {
     const t = await tasaVigente()
     if (!t) return alert('No hay tasas cargadas. Ve a «Tasa de cambio».')
@@ -73,10 +99,17 @@ export default function CotizacionEditor() {
           <button className="sec" onClick={() => navigate('/cotizaciones')}>Volver</button>
           <button className="sec" onClick={() => guardar(`/cotizaciones/${c.id}/imprimir`)} disabled={!c.items.length}>Ver / imprimir PDF</button>
           <button onClick={() => guardar()}>Guardar</button>
+          {pedido
+            ? <button className="sec" onClick={() => navigate('/pedidos/' + pedido.id)}>Ver {codigoPedido(pedido.numero)}</button>
+            : <button onClick={convertirEnPedido} disabled={!c.items.length}>Convertir en pedido</button>}
         </div>
       </div>
 
       <div className="tarjeta">
+        <div className="fila">
+          <Selector label="Cliente registrado" valor={c.clienteId ?? ''} onCambio={elegirCliente} vacio="— Escribir a mano —"
+            opciones={clientes.map((x) => ({ value: x.id, label: x.nombre }))} />
+        </div>
         <div className="fila">
           <Campo label="Cliente" valor={c.cliente} onCambio={(v) => set('cliente', v)} />
           <Campo label="Contacto del cliente" valor={c.contactoCliente} onCambio={(v) => set('contactoCliente', v)} />
@@ -84,6 +117,9 @@ export default function CotizacionEditor() {
           <Selector className="auto" label="Estado" valor={c.estado} onCambio={(v) => set('estado', v)}
             opciones={Object.entries(ESTADOS).map(([value, label]) => ({ value, label }))} />
         </div>
+        {!c.clienteId && c.cliente?.trim() && (
+          <button className="sec mini" onClick={guardarClienteNuevo}>Guardar «{c.cliente.trim()}» como cliente</button>
+        )}
       </div>
 
       <Avisos lista={avisos} titulo="Para que el precio sea exacto, completa:" />
