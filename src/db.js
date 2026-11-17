@@ -144,15 +144,15 @@ export async function tieneDatos() {
 
 export { TABLAS }
 
+// Validación previa a la restauración; compatible con tablas ausentes en respaldos antiguos.
 export function validarRespaldo(datos) {
-  if (datos?.app !== 'atelune-erp' || datos.version !== 1) throw new Error('Respaldo incompatible.')
+  if (!datos || datos.app !== 'atelune-erp' || datos.version !== 1) throw new Error('Respaldo incompatible.')
   if (!Array.isArray(datos.config) || !datos.config.some(c => c?.id === 'general')) throw new Error('Falta configuración general.')
-  for (const t of TABLAS) {
-    if (Object.hasOwn(datos, t) && (!Array.isArray(datos[t]) || datos[t].length > 100000 || datos[t].some(x => !x || typeof x !== 'object' || Array.isArray(x)))) throw new Error('Tabla inválida: ' + t)
-  }
+  for (const t of TABLAS) if (Object.hasOwn(datos,t) &&
+    (!Array.isArray(datos[t]) || datos[t].length > 100000 || datos[t].some(x => !x || typeof x !== 'object' || Array.isArray(x))))
+    throw new Error('Tabla inválida: ' + t)
   return true
 }
-
 export async function importarRespaldo(datos) {
   validarRespaldo(datos)
   await db.transaction('rw', TABLAS.map((t) => db[t]), async () => {
