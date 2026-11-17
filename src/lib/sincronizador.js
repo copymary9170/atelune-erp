@@ -27,7 +27,8 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
     asegurarActivo()
     if (cambios !== marca || meta.get().sucio) {
       conflicto = r
-      return estado('conflicto', r)
+      estado('conflicto', r)
+      return false
     }
     aplicandoRemoto = true
     try {
@@ -39,6 +40,7 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
     // No declarar sincronizada una copia si hubo ediciones durante la importación.
     const pendiente = cambios !== marca
     meta.set({ version: r.version, sucio: pendiente, ultimaSync: new Date().toISOString() })
+    return true
   }
 
   async function bajarElegido(r, marca) {
@@ -78,6 +80,7 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
     ocupado = true
     estado('sincronizando')
     try {
+      let confirmado = false
       for (let intento = 0; intento < 3; intento++) {
         // Leer el estado local DESPUÉS de la consulta remota. Durante la espera pueden
         // producirse ediciones; usar una copia anterior permitiría sobrescribirlas.
@@ -93,16 +96,19 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
           const hayDatos = await local.tieneDatos()
           // El cambio pudo ocurrir mientras consultábamos la nube o la base.
           if (hayDatos || meta.get().sucio || cambios !== marcaLectura) { conflicto = r; return estado('conflicto', r) }
-          await bajar(r, marcaLectura)
+          if (!(await bajar(r, marcaLectura))) return
         } else if (r.version > m.version) {
           if (m.sucio || meta.get().sucio || cambios !== marcaLectura) { conflicto = r; return estado('conflicto', r) }
-          await bajar(r, marcaLectura)
+          if (!(await bajar(r, marcaLectura))) return
         } else if (m.sucio || r.version < m.version) {
           if (!(await subir(r.version))) continue // cambió entre leer y subir: reintentar
         }
+        confirmado = true
         break
       }
       asegurarActivo()
+      // Nunca declarar sincronizado algo que Supabase no confirmó.
+      if (!confirmado) throw new Error('La copia remota cambió repetidamente; no se pudo confirmar el guardado. Conserva el respaldo local y vuelve a sincronizar.')
       estado(meta.get().sucio ? 'sincronizando' : 'ok', meta.get())
     } catch (e) {
       if (activo) estado(esErrorDeRed(e) ? 'sin_conexion' : 'error', e)

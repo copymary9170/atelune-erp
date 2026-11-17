@@ -38,7 +38,7 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 
 - **Primero local**: la app trabaja con los datos del navegador (funciona sin internet) y guarda una copia completa en Supabase cuando hay conexión. Ver `src/lib/sincronizador.js` y `src/nube.js`.
 - Cada guardado aumenta un número de versión. Si dos dispositivos cambian datos a la vez, la app pregunta cuál conservar: nunca pisa nada en silencio.
-- Inicio de sesión con correo y contraseña; cada usuaria solo puede ver su propia fila (políticas RLS en `supabase/esquema.sql`).
+- Inicio de sesión con correo y contraseña; `supabase/esquema.sql` define políticas RLS para que cada cuenta acceda solo a su fila. **Falta confirmar que estas políticas estén aplicadas y funcionen en el Supabase real**.
 - Sin las variables de Supabase, la app sigue funcionando solo en el navegador.
 
 #### Configuración
@@ -72,9 +72,11 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 - Menú con indicador de sección activa; estados en color según su etapa; estados vacíos con el motivo de la marca; avisos con variante suave.
 - Pantalla de acceso adaptada al diseño actual; cotización impresa con membrete, lema editable, bloque de cliente y pie de página.
 
-## Próximas etapas
+## Estado de validación y próximas comprobaciones
 
-Reportes globales de rentabilidad en fase de prueba.
+Las Etapas 1 a 14 tienen implementaciones en el repositorio. Las pruebas automatizadas y la compilación no equivalen a una auditoría de la base Supabase real ni a pruebas visuales de todas las pantallas. Antes de depender de la nube con varias cuentas, ejecutar `supabase/verificar_rls.sql` en el proyecto correcto y completar las comprobaciones de dos usuarios descritas en `AUDITORIA_INTEGRAL_2026-11-17.md`.
+
+El comparador de cantidades (10, 50, 100 y cantidad actual) está disponible en una rama de prueba y conserva los descuentos por escalones de la Etapa 10. No genera precios mínimos garantizados ni altera cotizaciones hasta que se cambie y guarde una cantidad manualmente.
 
 ## Dónde se guardan los datos
 
@@ -110,7 +112,7 @@ Se registra por renglón/etapa la persona responsable, minutos, una tarifa horar
 Los datos se almacenan en `pedido.tiemposProduccion`, separado de `pedido.produccionEtapas`.
 El costo mostrado es únicamente la suma de sesiones **con tarifa registrada**; si hay sesiones sin tarifa se marca «costo incompleto».
 No se transfieren automáticamente importes a los precios de venta, reparto, nómina, caja ni contabilidad, ni se modifican inventarios.
-Los pedidos cerrados no admiten cambios en tiempos. Antes de publicar: realizar copia de seguridad y comprobar compilación (`npm ci && npm run build`), que no se pudo completar en el entorno offline.
+Los pedidos cerrados no admiten cambios en tiempos. Antes de cambios de versión o restauraciones, realizar una copia de seguridad; las pruebas de compilación del repositorio se verifican por separado de la seguridad real de Supabase.
 
 ## Etapa 9: rediseño «Taller creativo» y seguimiento operativo
 
@@ -133,7 +135,7 @@ Los pedidos cerrados no admiten cambios en tiempos. Antes de publicar: realizar 
 
 Antes de trabajar con una nueva versión, exporta un respaldo desde Configuración. No subas ZIP de etapas antiguas sobre el código actual; trabaja desde `main` y usa ramas de prueba. La sincronización en vivo entre dos cuentas y las políticas RLS de Supabase requieren una verificación independiente de las pruebas automatizadas.
 
-## Etapa 11 (en prueba): caja y arqueo de efectivo
+## Etapa 11 (integrada en código; pruebas visuales pendientes): caja y arqueo de efectivo
 
 - Nueva pantalla **Finanzas → Caja y arqueo** para registrar cierres por día y método de efectivo: separa **Efectivo $** de **Efectivo Bs**.
 - Detecta entradas desde abonos de pedidos no anulados y aportes de capital; descuenta gastos, pagos a proveedores, retiros, reparto y compras de inventario pagadas con ese método.
@@ -145,7 +147,7 @@ Antes de trabajar con una nueva versión, exporta un respaldo desde Configuraci�
 - Los arqueos se guardan en la tabla IndexedDB `cajaArqueos` (esquema v4) y están incluidos en los respaldos y la sincronización existente. Un respaldo antiguo sin arqueos no puede borrar los cierres que ya estén almacenados.
 - Antes de promover esta etapa a producción, comprobar el funcionamiento en la vista previa con operaciones ficticias, respaldo descargado y sincronización validada. Los movimientos antiguos de compras pagadas en Bs sin tasa se mantienen pendientes, sin inventar importes.
 
-## Etapa 12 (en prueba): reportes globales de rentabilidad
+## Etapa 12 (integrada en código; pruebas visuales pendientes): reportes globales de rentabilidad
 
 - En **Finanzas → Reportes de rentabilidad** se filtran los pedidos **entregados** por su fecha real de entrega, con vistas por pedido, mes, línea de servicio y descripción del trabajo.
 - Las ventas de trabajos se basan en el subtotal de cada pedido, **sin IVA, delivery ni recargos**. Los costos son los **presupuestados y congelados** al crear el pedido; la utilidad es presupuestada, no el beneficio neto real o contable.
@@ -156,7 +158,7 @@ Antes de trabajar con una nueva versión, exporta un respaldo desde Configuraci�
 - Se pueden exportar los pedidos filtrados a **CSV compatible con Excel**, sin modificar ningún registro.
 - Para utilidad contable del negocio, utilizar **Contabilidad → Estado de resultados**. Esta pantalla es auxiliar de análisis comercial y no modifica inventario, caja, reparto ni asientos.
 
-## Etapa 13 (en prueba): cuentas por cobrar
+## Etapa 13 (integrada en código; pruebas visuales pendientes): cuentas por cobrar
 
 - Pantalla **Finanzas → Cuentas por cobrar**, con saldos actuales de pedidos, abonos vigentes, clasificación por fecha prevista de entrega y enlaces al detalle de cada pedido.
 - Clasifica importes en **vencidos**, **por vencer** y **sin fecha**, con seguimiento separado de los pedidos ya entregados que todavía tienen saldo.
@@ -165,10 +167,16 @@ Antes de trabajar con una nueva versión, exporta un respaldo desde Configuraci�
 - La fecha de referencia seleccionada se utiliza solo para **clasificar vencimientos**. Los saldos reflejan los abonos existentes hoy; no reconstruye la cartera histórica de una fecha pasada.
 - No genera pagos, intereses, asientos contables ni movimientos de caja. Los importes se muestran en USD, tal como se guardaron en los pedidos.
 
-## Etapa 14 (en prueba): seguimiento de cobranza por cliente
+## Etapa 14 (integrada en código; pruebas visuales pendientes): seguimiento de cobranza por cliente
 
 - En **Finanzas → Cuentas por cobrar** se añade una tabla con el total pendiente por cliente, cantidad de pedidos pendientes, saldo correspondiente a pedidos entregados y saldo de pedidos cuya fecha de entrega prevista ya pasó.
 - Agrupa por **clienteId** cuando existe; de lo contrario por nombre normalizado. **Los pedidos sin nombre se mantienen separados** para no mezclar deudas de personas diferentes.
 - Los saldos de la agrupación corresponden a los pedidos con total y abonos válidos. Los abonos anulados y los pedidos cancelados no se contabilizan y los sobrepagos no se compensan contra otros pedidos.
 - Se corrige la terminología: **fecha prevista de entrega ≠ fecha de vencimiento de pago**. Se muestra expresamente «entrega prevista pasada» en vez de afirmar que una deuda está legalmente vencida.
 - Es un informe de solo lectura; no envía mensajes, no crea intereses ni modifica la base o los pedidos.
+
+## Comparador de cantidades de la Etapa 10 (rama de revisión)
+
+En una cotización, abre un trabajo y consulta **Comparador de cantidades**. Muestra 10, 50 y 100 unidades y, si es diferente, la cantidad actual. Cada escenario usa el mismo motor `calcularCotizacion` y conserva los demás trabajos y condiciones de pago. Incluye **costo total, costo unitario, precio unitario, precio total, utilidad y margen**, junto con las alertas de costos incompletos, pérdidas y descuentos aplicados. Materiales, merma, máquinas, producción, diseño (una vez), extras y prorrateo de costos fijos se calculan de nuevo para cada escenario.
+
+El comparador **no guarda datos** ni modifica descuentos. El precio mostrado es un escenario de venta basado en los márgenes y descuentos configurados: **no es una recomendación automática de precio mínimo**. Delivery, comisiones e IVA se excluyen de la tabla por trabajo, aunque el motor los calcula para el total de cotización completa.
