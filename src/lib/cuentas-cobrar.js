@@ -49,7 +49,7 @@ export function reporteCuentasPorCobrar(pedidos, fechaReferencia) {
     const nombre = String(f.cliente || '').trim()
     const tieneNombre = nombre && nombre !== 'Sin cliente'
     const clave = p?.clienteId != null ? 'id:' + p.clienteId
-      : tieneNombre ? 'nombre:' + nombre.toLocaleLowerCase('es-VE').replace(/\\s+/g, ' ')
+      : tieneNombre ? 'nombre:' + nombre.toLocaleLowerCase('es-VE').replace(/\s+/g, ' ')
       : 'pedido:' + f.id
     if (!mapaClientes.has(clave)) mapaClientes.set(clave, {
       clave, nombre: tieneNombre ? nombre : 'Sin cliente (pedido ' + f.numero + ')',
