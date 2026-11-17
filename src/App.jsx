@@ -18,6 +18,7 @@ import Pedidos, { PedidoDetalle } from './pages/Pedidos.jsx'
 import Contactos from './pages/Contactos.jsx'
 import Gastos from './pages/Gastos.jsx'
 import Caja from './pages/Caja.jsx'
+import ReportesRentabilidad from './pages/ReportesRentabilidad.jsx'
 import Contabilidad from './pages/Contabilidad.jsx'
 import Reparto from './pages/Reparto.jsx'
 
@@ -38,14 +39,13 @@ const MENU = [
   { to: '/caja', icono: 'M3 7h18v13H3zM3 7l3-3h15M7 12h10M7 16h6', label: 'Caja y arqueo' },
   { to: '/reparto', icono: 'M12 3v9h9A9 9 0 1 1 12 3M15 3.5A9 9 0 0 1 20.5 9H15z', label: 'Reparto de utilidades' },
   { to: '/contabilidad', icono: 'M5 3h14v18H5zM9 7h6M9 11h6M9 15h3', label: 'Contabilidad' },
+  { to: '/reportes-rentabilidad', icono: 'M3 20V10h4v10M10 20V4h4v16M17 20v-7h4v7', label: 'Reportes de rentabilidad' },
   { seccion: 'Ajustes' },
   { to: '/tasas', icono: 'M4 8h14l-3-3M20 16H6l3 3', label: 'Tasa de cambio' },
   { to: '/configuracion', icono: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2', label: 'Configuración y respaldo' },
 ]
 
 const TABBAR = ['/', '/cotizaciones', '/pedidos', '/inventario']
-
-const PROXIMAMENTE = ['Reportes de rentabilidad']
 
 export default function App() {
   const sesion = useSesion()
@@ -149,10 +149,7 @@ function Interfaz() {
             </NavLink>
           ),
         )}
-        <div className="seccion">Próximas etapas</div>
-        {PROXIMAMENTE.map((p) => (
-          <div className="proximo" key={p}>{p}</div>
-        ))}
+
         <div className="espaciador" />
         {nubeConfigurada && <IndicadorNube />}
       </nav>
@@ -186,6 +183,7 @@ function Interfaz() {
           <Route path="/caja" element={<Caja />} />
           <Route path="/reparto" element={<Reparto />} />
           <Route path="/contabilidad" element={<Contabilidad />} />
+          <Route path="/reportes-rentabilidad" element={<ReportesRentabilidad />} />
           <Route path="/tasas" element={<Tasas />} />
           <Route path="/configuracion" element={<Configuracion />} />
         </Routes>
