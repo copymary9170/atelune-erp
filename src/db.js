@@ -137,10 +137,10 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
 // ---------- Respaldo ----------
 const TABLAS = ['config', 'productos', 'movimientos', 'activos', 'tasas', 'plantillas', 'cotizaciones', 'clientes', 'proveedores', 'pedidos', 'gastos', 'asientosManuales']
 
-export async function exportarDatos() {
+export async function exportarDatos({ origen = db } = {}) {
   const datos = { app: 'atelune-erp', version: 1, fecha: new Date().toISOString() }
-  await db.transaction('r', TABLAS.map((t) => db[t]), async () => {
-    for (const t of TABLAS) datos[t] = await db[t].toArray()
+  await origen.transaction('r', TABLAS.map((t) => origen[t]), async () => {
+    for (const t of TABLAS) datos[t] = await origen[t].toArray()
   })
   return datos
 }
@@ -151,9 +151,9 @@ export async function exportarRespaldo() {
   return datos
 }
 
-export async function tieneDatos() {
+export async function tieneDatos({ origen = db } = {}) {
   for (const t of ['productos', 'pedidos', 'cotizaciones', 'activos', 'gastos', 'clientes', 'proveedores', 'movimientos', 'plantillas', 'asientosManuales'])
-    if ((await db[t].count()) > 0) return true
+    if ((await origen[t].count()) > 0) return true
   return false
 }
 
@@ -183,9 +183,13 @@ async function prepararBaseCuentaInterna(uid, confirmarLegado) {
   if (!yaExiste) {
     const legada = db.name === NOMBRE_BASE_LEGADA ? db : crearBase(NOMBRE_BASE_LEGADA)
     try {
-      const conDatos = await legada.transaction('r', TABLAS.map((t) => legada[t]), async () =>
-        (await Promise.all(TABLAS.filter(t => t !== 'config').map(t => legada[t].count()))).some(n => n > 0)
-      )
+      const conDatos = await legada.transaction('r', TABLAS.map((t) => legada[t]), async () => {
+        const filas = await Promise.all(TABLAS.filter(t => t !== 'config').map(t => legada[t].count()))
+        if (filas.some(n => n > 0)) return true
+        const configLegada = await legada.config.get('general')
+        return !!configLegada && Object.entries(configLegada).some(([k, v]) =>
+          k !== 'ultimoRespaldo' && JSON.stringify(v) !== JSON.stringify(CONFIG_INICIAL[k]))
+      })
       if (conDatos && !propietario && !confirmarLegado) {
         return { estado: 'confirmar', migrada: false, nueva: false }
       }
@@ -235,16 +239,16 @@ export function validarRespaldo(datos) {
     throw new Error('Tabla inválida: ' + t)
   return true
 }
-export async function importarRespaldo(datos) {
+export async function importarRespaldo(datos, { destino = db } = {}) {
   validarRespaldo(datos)
-  await db.transaction('rw', TABLAS.map((t) => db[t]), async () => {
+  await destino.transaction('rw', TABLAS.map((t) => destino[t]), async () => {
     // Un archivo antiguo puede omitir tablas nuevas, pero nunca debe borrar datos actuales sin aviso.
     for (const t of TABLAS) {
-      if (!Array.isArray(datos[t]) && (await db[t].count()) > 0) throw new Error('El respaldo omite una tabla que contiene datos: ' + t)
+      if (!Array.isArray(datos[t]) && (await destino[t].count()) > 0) throw new Error('El respaldo omite una tabla que contiene datos: ' + t)
     }
     for (const t of TABLAS) {
-      await db[t].clear()
-      if (Array.isArray(datos[t])) await db[t].bulkPut(datos[t]) // tablas que no existan en respaldos viejos quedan vacías
+      await destino[t].clear()
+      if (Array.isArray(datos[t])) await destino[t].bulkPut(datos[t]) // tablas que no existan en respaldos viejos quedan vacías
     }
   })
 }
