@@ -18,29 +18,37 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
   let cambios = 0 // cuenta los cambios locales para saber si hubo más mientras se subía
   let conflicto = null
   let aplicandoRemoto = false
+  let activo = true
+  const asegurarActivo = () => { if (!activo) throw new Error('Sincronización detenida.') }
 
   const estado = (e, d) => alEstado(e, d)
 
   async function bajar(r) {
+    asegurarActivo()
     aplicandoRemoto = true
     try {
       await local.importar(r.datos)
     } finally {
       aplicandoRemoto = false
     }
+    asegurarActivo()
     meta.set({ version: r.version, sucio: false, ultimaSync: new Date().toISOString() })
   }
 
   async function subir(versionEsperada) {
+    asegurarActivo()
     const marca = cambios
     const datos = await local.exportar()
+    asegurarActivo()
     const v = versionEsperada == null ? await remoto.insertar(datos) : await remoto.actualizar(datos, versionEsperada)
+    asegurarActivo()
     if (v == null) return false // otro dispositivo guardó primero
     meta.set({ version: v, sucio: cambios !== marca, ultimaSync: new Date().toISOString() })
     return true
   }
 
   async function sincronizar() {
+    if (!activo) return
     if (conflicto) return estado('conflicto', conflicto)
     if (ocupado) { repetir = true; return }
     ocupado = true
@@ -50,6 +58,7 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
         // Leer el estado local DESPUÉS de la consulta remota. Durante la espera pueden
         // producirse ediciones; usar una copia anterior permitiría sobrescribirlas.
         const r = await remoto.leer()
+        asegurarActivo()
         const m = meta.get()
         if (!r) {
           // La nube está vacía: se sube lo de este dispositivo.
@@ -68,12 +77,13 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
         }
         break
       }
+      asegurarActivo()
       estado(meta.get().sucio ? 'sincronizando' : 'ok', meta.get())
     } catch (e) {
-      estado(esErrorDeRed(e) ? 'sin_conexion' : 'error', e)
+      if (activo) estado(esErrorDeRed(e) ? 'sin_conexion' : 'error', e)
     } finally {
       ocupado = false
-      if (repetir || (meta.get().sucio && !conflicto)) {
+      if (activo && (repetir || (meta.get().sucio && !conflicto))) {
         repetir = false
         if (meta.get().sucio && !conflicto) setTimeout(sincronizar, 1500)
       }
@@ -82,8 +92,9 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
 
   return {
     sincronizar,
+    detener() { activo = false; conflicto = null; repetir = false },
     marcarCambio() {
-      if (aplicandoRemoto) return
+      if (!activo || aplicandoRemoto) return
       cambios++
       meta.set({ sucio: true })
     },
@@ -91,6 +102,7 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
     get conflicto() { return conflicto },
     /** eleccion: 'nube' (bajar y descartar lo local) o 'local' (subir y reemplazar la nube). */
     async resolver(eleccion) {
+      asegurarActivo()
       const r = conflicto
       if (!r) return
       if (eleccion === 'nube') {
