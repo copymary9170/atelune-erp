@@ -47,17 +47,21 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
     estado('sincronizando')
     try {
       for (let intento = 0; intento < 3; intento++) {
-        const m = meta.get()
+        // Leer el estado local DESPUÉS de la consulta remota. Durante la espera pueden
+        // producirse ediciones; usar una copia anterior permitiría sobrescribirlas.
         const r = await remoto.leer()
+        const m = meta.get()
         if (!r) {
           // La nube está vacía: se sube lo de este dispositivo.
           await subir(null)
         } else if (m.version == null) {
           // Primera vez en este dispositivo.
-          if (await local.tieneDatos()) { conflicto = r; return estado('conflicto', r) }
+          const hayDatos = await local.tieneDatos()
+          // Otra edición pudo ocurrir mientras se comprobaba la base local.
+          if (hayDatos || meta.get().sucio) { conflicto = r; return estado('conflicto', r) }
           await bajar(r)
         } else if (r.version > m.version) {
-          if (m.sucio) { conflicto = r; return estado('conflicto', r) }
+          if (m.sucio || meta.get().sucio) { conflicto = r; return estado('conflicto', r) }
           await bajar(r)
         } else if (m.sucio || r.version < m.version) {
           if (!(await subir(r.version))) continue // cambió entre leer y subir: reintentar
@@ -89,8 +93,17 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
     async resolver(eleccion) {
       const r = conflicto
       if (!r) return
-      if (eleccion === 'nube') await bajar(r)
-      else {
+      if (eleccion === 'nube') {
+        // El conflicto mostrado puede haberse quedado desactualizado mientras la
+        // persona decide: comprobar que la copia remota no cambió otra vez.
+        const actual = await remoto.leer()
+        if (!actual) throw new Error('La copia de la nube ya no está disponible.')
+        if (actual.version !== r.version) {
+          conflicto = actual
+          return estado('conflicto', conflicto)
+        }
+        await bajar(actual)
+      } else {
         const ok = await subir(r.version)
         if (!ok) { conflicto = await remoto.leer(); return estado('conflicto', conflicto) }
       }
