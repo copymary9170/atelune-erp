@@ -23,8 +23,12 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
 
   const estado = (e, d) => alEstado(e, d)
 
-  async function bajar(r) {
+  async function bajar(r, marca = cambios) {
     asegurarActivo()
+    if (cambios !== marca || meta.get().sucio) {
+      conflicto = r
+      return estado('conflicto', r)
+    }
     aplicandoRemoto = true
     try {
       await local.importar(r.datos)
@@ -32,7 +36,25 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
       aplicandoRemoto = false
     }
     asegurarActivo()
-    meta.set({ version: r.version, sucio: false, ultimaSync: new Date().toISOString() })
+    // No declarar sincronizada una copia si hubo ediciones durante la importación.
+    const pendiente = cambios !== marca
+    meta.set({ version: r.version, sucio: pendiente, ultimaSync: new Date().toISOString() })
+  }
+
+  async function bajarElegido(r, marca) {
+    asegurarActivo()
+    if (cambios !== marca) {
+      conflicto = r
+      return estado('conflicto', r)
+    }
+    aplicandoRemoto = true
+    try {
+      await local.importar(r.datos)
+    } finally {
+      aplicandoRemoto = false
+    }
+    asegurarActivo()
+    meta.set({ version: r.version, sucio: cambios !== marca, ultimaSync: new Date().toISOString() })
   }
 
   async function subir(versionEsperada) {
@@ -57,21 +79,22 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
       for (let intento = 0; intento < 3; intento++) {
         // Leer el estado local DESPUÉS de la consulta remota. Durante la espera pueden
         // producirse ediciones; usar una copia anterior permitiría sobrescribirlas.
+        const marcaLectura = cambios
         const r = await remoto.leer()
         asegurarActivo()
         const m = meta.get()
         if (!r) {
           // La nube está vacía: se sube lo de este dispositivo.
-          await subir(null)
+          if (!(await subir(null))) continue
         } else if (m.version == null) {
           // Primera vez en este dispositivo.
           const hayDatos = await local.tieneDatos()
-          // Otra edición pudo ocurrir mientras se comprobaba la base local.
-          if (hayDatos || meta.get().sucio) { conflicto = r; return estado('conflicto', r) }
-          await bajar(r)
+          // El cambio pudo ocurrir mientras consultábamos la nube o la base.
+          if (hayDatos || meta.get().sucio || cambios !== marcaLectura) { conflicto = r; return estado('conflicto', r) }
+          await bajar(r, marcaLectura)
         } else if (r.version > m.version) {
-          if (m.sucio || meta.get().sucio) { conflicto = r; return estado('conflicto', r) }
-          await bajar(r)
+          if (m.sucio || meta.get().sucio || cambios !== marcaLectura) { conflicto = r; return estado('conflicto', r) }
+          await bajar(r, marcaLectura)
         } else if (m.sucio || r.version < m.version) {
           if (!(await subir(r.version))) continue // cambió entre leer y subir: reintentar
         }
@@ -106,15 +129,18 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
       const r = conflicto
       if (!r) return
       if (eleccion === 'nube') {
+        const marcaEleccion = cambios
         // El conflicto mostrado puede haberse quedado desactualizado mientras la
         // persona decide: comprobar que la copia remota no cambió otra vez.
         const actual = await remoto.leer()
         if (!actual) throw new Error('La copia de la nube ya no está disponible.')
-        if (actual.version !== r.version) {
+        if (actual.version !== r.version || cambios !== marcaEleccion) {
           conflicto = actual
           return estado('conflicto', conflicto)
         }
-        await bajar(actual)
+        // La elección explícita permite reemplazar la copia local, a diferencia
+        // de una descarga automática. Revisar la versión una última vez primero.
+        await bajarElegido(actual, marcaEleccion)
       } else {
         const ok = await subir(r.version)
         if (!ok) { conflicto = await remoto.leer(); return estado('conflicto', conflicto) }
