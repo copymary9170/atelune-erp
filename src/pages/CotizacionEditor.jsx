@@ -5,6 +5,7 @@ import { db, tasaVigente, crearPedidoDesdeCotizacion, codigoPedido, duplicarCoti
 import { escalasInvalidas } from '../lib/escalas-cotizaciones.js'
 import { Avisos, Campo, Selector } from '../components/ui.jsx'
 import ItemEditor, { itemVacio } from '../components/ItemEditor.jsx'
+import ComparadorCantidades from '../components/ComparadorCantidades.jsx'
 import { useDatosCalculo } from './Plantillas.jsx'
 import { ESTADOS, codigo } from './Cotizaciones.jsx'
 import { calcularCotizacion, avisosCotizacion, faltantesDeCosto } from '../lib/calc.js'
@@ -165,6 +166,7 @@ export default function CotizacionEditor() {
             {abierto === i && (
               <>
                 <ItemEditor item={it} onCambio={(v) => setItem(i, v)} {...datos} esCotizacion />
+                <ComparadorCantidades cotizacion={c} indice={i} datos={datos} />
                 <table className="resumen desglose" style={{ maxWidth: 520 }}>
                   <tbody>
                     <tr><td>Materiales (incluye merma {usd(rr.merma)})</td><td className="num">{usd(rr.materiales)}</td></tr>
