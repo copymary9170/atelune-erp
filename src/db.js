@@ -4,9 +4,18 @@ import { aplicarMovimiento, calcularCotizacion, consumoPedido, faltantesDeCosto,
 // Base de datos local (IndexedDB, dentro del navegador).
 // Toda la lógica de datos pasa por este archivo para poder migrar
 // a una base en la nube (p. ej. Supabase) más adelante sin reescribir pantallas.
-export const db = new Dexie('atelune-erp')
+export const NOMBRE_BASE_LEGADA = 'atelune-erp'
 
-db.version(1).stores({
+// Una base independiente por usuario autenticado; los nombres antiguos nunca se borran.
+// El UID proviene exclusivamente de la sesión verificada por Supabase.
+export function nombreBaseCuenta(uid) {
+  if (typeof uid !== 'string' || !/^[a-f0-9-]{36}$/i.test(uid)) throw new Error('Identificador de cuenta inválido.')
+  return 'atelune-erp-cuenta-' + uid.toLowerCase()
+}
+
+function crearBase(nombre) {
+  const instancia = new Dexie(nombre)
+  instancia.version(1).stores({
   config: 'id',
   productos: '++id, codigo, nombre, tipo, lineaId',
   movimientos: '++id, productoId, fecha, tipo',
@@ -28,7 +37,13 @@ db.version(2).stores({
 db.version(3).stores({
   gastos: '++id, fecha, tipo, categoria, proveedorId',
   asientosManuales: '++id, fecha',
-})
+  })
+  return instancia
+}
+
+// El binding ES mutable: cada consulta usa la base asignada a la sesión actual.
+// La interfaz siempre se desmonta antes de cambiarla.
+export let db = crearBase(NOMBRE_BASE_LEGADA)
 
 export const TIPOS_PRODUCTO = {
   reventa: 'Producto de reventa',
@@ -143,6 +158,73 @@ export async function tieneDatos() {
 }
 
 export { TABLAS }
+
+// Una instalación antigua guarda todos los datos en la base compartida. Solo la
+// cuenta propietaria puede migrarla. La copia se hace en una transacción atómica,
+// sin borrar ni modificar la base antigua. Así puede recuperarse manualmente.
+let cambioBasePendiente = Promise.resolve()
+
+export function prepararBaseCuenta(uid, { confirmarLegado = false } = {}) {
+  const trabajo = cambioBasePendiente.then(() => prepararBaseCuentaInterna(uid, confirmarLegado))
+  cambioBasePendiente = trabajo.catch(() => {})
+  return trabajo
+}
+
+async function prepararBaseCuentaInterna(uid, confirmarLegado) {
+  const nombre = nombreBaseCuenta(uid)
+  if (db.name === nombre) return { estado: 'lista', migrada: false, nueva: false }
+
+  const { leerPropietarioLocal, vincularPropietarioLocal } = await import('./lib/cuenta-local.js')
+  const propietario = leerPropietarioLocal() // un error de almacenamiento detiene el acceso
+
+  // Si existe la base individual, nunca se vuelve a migrar desde la base antigua.
+  // Esto preserva todos los cambios hechos después de la primera apertura.
+  const yaExiste = await Dexie.exists(nombre)
+  if (!yaExiste) {
+    const legada = db.name === NOMBRE_BASE_LEGADA ? db : crearBase(NOMBRE_BASE_LEGADA)
+    try {
+      const conDatos = await legada.transaction('r', TABLAS.map((t) => legada[t]), async () =>
+        (await Promise.all(TABLAS.filter(t => t !== 'config').map(t => legada[t].count()))).some(n => n > 0)
+      )
+      if (conDatos && !propietario && !confirmarLegado) {
+        return { estado: 'confirmar', migrada: false, nueva: false }
+      }
+      const migrar = conDatos && (propietario === uid || (!propietario && confirmarLegado))
+      // Conservar propietario histórico de otra cuenta: no transferir datos ajenos.
+      if (migrar && !propietario) vincularPropietarioLocal(uid)
+      const destino = crearBase(nombre)
+      try {
+        if (migrar) {
+          const datos = {}
+          await legada.transaction('r', TABLAS.map(t => legada[t]), async () => {
+            for (const t of TABLAS) datos[t] = await legada[t].toArray()
+          })
+          await destino.transaction('rw', TABLAS.map(t => destino[t]), async () => {
+            for (const t of TABLAS) await destino[t].bulkPut(datos[t])
+          })
+        }
+        // Solo marcamos el destino como listo tras una transferencia completa.
+        await destino.open()
+        db.close()
+        db = destino
+        await inicializar()
+        return { estado: 'lista', migrada: migrar, nueva: true }
+      } catch (err) {
+        destino.close()
+        throw err
+      }
+    } finally {
+      if (legada !== db) legada.close()
+    }
+  }
+
+  const destino = crearBase(nombre)
+  await destino.open()
+  db.close()
+  db = destino
+  await inicializar()
+  return { estado: 'lista', migrada: false, nueva: false }
+}
 
 // Validación previa a la restauración; compatible con tablas ausentes en respaldos antiguos.
 export function validarRespaldo(datos) {
