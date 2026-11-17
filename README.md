@@ -74,7 +74,7 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 
 ## Próximas etapas
 
-Caja y arqueo · Reportes globales de rentabilidad.
+Reportes globales de rentabilidad en fase de prueba.
 
 ## Dónde se guardan los datos
 
@@ -144,3 +144,14 @@ Antes de trabajar con una nueva versión, exporta un respaldo desde Configuraci�
 - El arqueo es un **control auxiliar**, no genera asientos contables, pagos, movimientos de efectivo ni ajustes automáticos. No mezcla bancos, pagos móviles o monedas.
 - Los arqueos se guardan en la tabla IndexedDB `cajaArqueos` (esquema v4) y están incluidos en los respaldos y la sincronización existente. Un respaldo antiguo sin arqueos no puede borrar los cierres que ya estén almacenados.
 - Antes de promover esta etapa a producción, comprobar el funcionamiento en la vista previa con operaciones ficticias, respaldo descargado y sincronización validada. Los movimientos antiguos de compras pagadas en Bs sin tasa se mantienen pendientes, sin inventar importes.
+
+## Etapa 12 (en prueba): reportes globales de rentabilidad
+
+- En **Finanzas → Reportes de rentabilidad** se filtran los pedidos **entregados** por su fecha real de entrega, con vistas por pedido, mes, línea de servicio y descripción del trabajo.
+- Las ventas de trabajos se basan en el subtotal de cada pedido, **sin IVA, delivery ni recargos**. Los costos son los **presupuestados y congelados** al crear el pedido; la utilidad es presupuestada, no el beneficio neto real o contable.
+- Si faltan costos, los pedidos se enumeran como incompletos: sus ventas conocidas se muestran aparte, pero no se les asigna utilidad ficticia.
+- Un pedido entregado sin fecha verificable no se atribuye arbitrariamente al mes de creación.
+- Las líneas y trabajos solamente se desglosan si sus precios y costos concilian con los totales del pedido. Las diferencias no se distribuyen inventando importes.
+- Los pedidos abiertos aparecen únicamente como **presupuestos no realizados**, separados de ventas entregadas y de los cobros.
+- Se pueden exportar los pedidos filtrados a **CSV compatible con Excel**, sin modificar ningún registro.
+- Para utilidad contable del negocio, utilizar **Contabilidad → Estado de resultados**. Esta pantalla es auxiliar de análisis comercial y no modifica inventario, caja, reparto ni asientos.
