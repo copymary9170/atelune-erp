@@ -15,7 +15,7 @@ export function resumenCalculo(r) {
   return {
     total: r.total, totalBs: r.totalBs, subtotal: r.subtotal, envio: r.envio, comision: r.comision, iva: r.iva,
     costoTotal: r.costoTotal, ganancia: r.ganancia, margenReal: r.margenReal,
-    renglones: r.renglones.map((x) => ({ precio: x.precio, precioUnitario: x.precioUnitario, descuento: x.descuento })),
+    renglones: r.renglones.map((x) => ({ precio: x.precio, precioUnitario: x.precioUnitario, descuento: x.descuento, descuentoCantidadPct: x.descuentoCantidadPct, umbralCantidad: x.umbralCantidad })),
   }
 }
 
