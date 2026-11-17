@@ -52,9 +52,10 @@ export default function ReportesRentabilidad() {
   const [desde, setDesde] = useState(inicioMes())
   const [hasta, setHasta] = useState(hoy())
   const [vista, setVista] = useState('lineas')
-  const r = useMemo(() => pedidos ? reporteRentabilidad(pedidos, { desde, hasta, config }) : null,
-    [pedidos, desde, hasta, config])
-  const rangoInvalido = desde && hasta && desde > hasta
+  const rangoInvalido = !!(desde && hasta && desde > hasta)
+  const r = useMemo(() => pedidos && !rangoInvalido
+    ? reporteRentabilidad(pedidos, { desde, hasta, config }) : null,
+    [pedidos, desde, hasta, config, rangoInvalido])
   const vistaFilas = vista === 'lineas' ? r?.porLinea : vista === 'trabajos' ? r?.porTrabajo : r?.porMes
 
   return <>
