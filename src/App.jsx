@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { nubeConfigurada, useSesion, iniciarNube, detenerNube } from './nube.js'
+import { nubeConfigurada, useSesion, iniciarNube, detenerNube, supabase } from './nube.js'
+import { tieneDatos } from './db.js'
+import { CLAVE_PROPIETARIO, decidirAccesoLocal, leerPropietarioLocal, vincularPropietarioLocal } from './lib/cuenta-local.js'
 import { Acceso, IndicadorNube, ConflictoNube } from './components/Nube.jsx'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { Logo, Marca } from './components/ui.jsx'
@@ -47,13 +49,78 @@ const PROXIMAMENTE = ['Reportes de rentabilidad']
 export default function App() {
   const sesion = useSesion()
   const uid = sesion?.user?.id
+  const [cuentaLocal, setCuentaLocal] = useState({ uid: null, fase: 'comprobando' })
+
   useEffect(() => {
-    if (uid) iniciarNube(uid)
-    else detenerNube()
+    // Antes de autorizar una nueva sesión detenemos todo sincronizador anterior.
+    detenerNube()
+    let vigente = true
+    setCuentaLocal({ uid, fase: 'comprobando' })
+    if (!nubeConfigurada || !uid) return () => { vigente = false; detenerNube() }
+
+    async function comprobar() {
+      try {
+        const propietario = leerPropietarioLocal()
+        const hayDatos = propietario ? false : await tieneDatos()
+        if (!vigente) return
+        const decision = decidirAccesoLocal(uid, propietario, hayDatos)
+        if (decision === 'vincular') vincularPropietarioLocal(uid)
+        if (!vigente) return
+        const fase = decision === 'vincular' ? 'permitida' : decision
+        setCuentaLocal({ uid, fase })
+        if (fase === 'permitida') iniciarNube(uid)
+      } catch {
+        if (vigente) setCuentaLocal({ uid, fase: 'bloqueada' })
+      }
+    }
+
+    const cambioDePropietario = (evento) => {
+      if (evento.key !== CLAVE_PROPIETARIO && evento.key !== null) return
+      try {
+        if (leerPropietarioLocal() === uid) return
+      } catch { /* sin acceso al almacenamiento: bloquear */ }
+      detenerNube()
+      if (vigente) setCuentaLocal({ uid, fase: 'bloqueada' })
+    }
+    window.addEventListener('storage', cambioDePropietario)
+    comprobar()
+    return () => {
+      vigente = false
+      window.removeEventListener('storage', cambioDePropietario)
+      detenerNube()
+    }
   }, [uid])
+
+  async function confirmarPropiedad() {
+    try {
+      // Solo una decisión explícita vincula datos heredados a la cuenta.
+      vincularPropietarioLocal(uid)
+      setCuentaLocal({ uid, fase: 'permitida' })
+      iniciarNube(uid)
+    } catch {
+      setCuentaLocal({ uid, fase: 'bloqueada' })
+    }
+  }
 
   if (nubeConfigurada && sesion === undefined) return <p className="muted" style={{ padding: 30 }}>Cargando…</p>
   if (nubeConfigurada && !sesion) return <Acceso />
+  if (nubeConfigurada && (cuentaLocal.uid !== uid || cuentaLocal.fase === 'comprobando'))
+    return <p className="muted" style={{ padding: 30 }}>Comprobando protección de los datos locales…</p>
+  if (nubeConfigurada && cuentaLocal.fase !== 'permitida') return (
+    <div className="acceso">
+      <div className="tarjeta" style={{ maxWidth: 520 }}>
+        <Marca size={38} />
+        <h2>{cuentaLocal.fase === 'confirmar' ? '¿Son tuyos los datos de este navegador?' : 'Este navegador pertenece a otra cuenta'}</h2>
+        <p>{cuentaLocal.fase === 'confirmar'
+          ? 'Hay información local anterior sin una cuenta vinculada. Confirma únicamente si esos datos son tuyos y corresponden a la cuenta con la que acabas de entrar. No se ha sincronizado nada.'
+          : 'Los datos locales están vinculados a otra cuenta o no puede verificarse su propietario. Para protegerlos, se ha bloqueado el acceso y la sincronización. Usa un perfil de navegador diferente o vuelve a la cuenta original.'}</p>
+        <div className="acciones">
+          {cuentaLocal.fase === 'confirmar' && <button onClick={confirmarPropiedad}>Sí, estos datos pertenecen a mi cuenta</button>}
+          <button className="sec" onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+        </div>
+      </div>
+    </div>
+  )
   return <Interfaz />
 }
 
