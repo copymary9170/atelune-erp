@@ -31,7 +31,12 @@ function TablaRentabilidad({ titulo, filas, vacio, columnaCantidad = false }) {
 function exportarCsv(r) {
   // Exportación sin bibliotecas ni cambios en la base. UTF-8 + BOM para Excel.
   const columnas = ['Pedido', 'Fecha de entrega', 'Cliente', 'Ventas trabajos USD', 'Costo presupuestado USD', 'Utilidad presupuestada USD', 'Margen %', 'Incompleto']
-  const escapar = v => '"' + String(v == null ? '' : v).replaceAll('"', '""') + '"'
+  // Evitar ejecutar fórmulas de hojas de cálculo introducidas en nombres de clientes.
+  const escapar = v => {
+    const t = v == null ? '' : String(v)
+    const seguro = typeof v === 'string' && /^[=+@\\-\\t\\r]/.test(t) ? "'" + t : t
+    return '"' + seguro.replaceAll('"', '""') + '"'
+  }
   const filas = [columnas, ...r.filas.map(f => [
     'PED-' + String(f.numero).padStart(4, '0'), f.fecha, f.cliente, f.venta, f.costo,
     f.utilidad, f.margenPct, f.incompleto ? 'Sí' : 'No',
