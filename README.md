@@ -16,7 +16,7 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 ### Etapa 2
 
 - **Pedidos y producción**: una cotización se convierte en pedido con un clic. Estados: aprobado → en diseño → en producción → listo → entregado (o cancelado). Fecha de entrega con aviso de atraso y notas de producción.
-- **Descuento automático del inventario** al pasar a producción. Si se cancela, los materiales vuelven al inventario. La merma se cobra en el precio, pero el desperdicio real se registra a mano como movimiento de «Merma».
+- **Descuento automático del inventario** al pasar a producción. Al cancelar un pedido, los materiales utilizados **no** vuelven automáticamente al inventario: se requiere confirmar que fueron recuperados físicamente. La merma real se registra por separado.
 - **Pagos y abonos** por pedido (con método y tasa), saldo pendiente y vista «Por cobrar».
 - **Clientes** con su historial de cotizaciones y pedidos y lo que deben; se pueden elegir o crear desde la cotización.
 - **Proveedores**: las entradas de inventario se asocian a un proveedor y queda el historial de compras.
@@ -67,18 +67,18 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 
 ### Etapa 8: diseño
 
-- Sistema visual propio en `src/index.css` (un solo lugar para colores, formas y tipografía), alineado con la marca: tinta nocturna, papel y latón; titulares en Cormorant Garamond con Georgia de respaldo.
+- Sistema visual actual «Taller creativo» en `src/index.css`: fondo claro, violeta de marca y acentos cian, magenta y amarillo; tipografía Bricolage Grotesque / Plus Jakarta Sans.
 - Logo redibujado (luna creciente sosteniendo un libro abierto), escudo de marca reutilizable, favicon nuevo.
 - Menú con indicador de sección activa; estados en color según su etapa; estados vacíos con el motivo de la marca; avisos con variante suave.
-- Pantalla de acceso con cielo nocturno; cotización impresa con membrete, lema editable, bloque de cliente y pie de página.
+- Pantalla de acceso adaptada al diseño actual; cotización impresa con membrete, lema editable, bloque de cliente y pie de página.
 
 ## Próximas etapas
 
-Caja y arqueo · Duplicar cotizaciones y escalas por cantidad · Reportes de rentabilidad.
+Caja y arqueo · Reportes globales de rentabilidad.
 
 ## Dónde se guardan los datos
 
-Por ahora se guardan en el navegador (IndexedDB) del equipo donde se use la app. Por eso hay que **descargar un respaldo con frecuencia** desde *Configuración y respaldo*. Toda la lógica de datos está en `src/db.js` para poder migrar a una base en la nube (Supabase) sin rehacer las pantallas.
+Los datos de trabajo se guardan localmente en IndexedDB (una base por cuenta autenticada cuando Supabase está configurado) y se sincronizan con Supabase cuando hay conexión, sujeto a los controles de conflicto. Sin Supabase la app permanece local. **Descarga respaldos frecuentes** desde *Configuración y respaldo* antes de migraciones o restauraciones.
 
 ## Desarrollo
 
@@ -111,3 +111,24 @@ Los datos se almacenan en `pedido.tiemposProduccion`, separado de `pedido.produc
 El costo mostrado es únicamente la suma de sesiones **con tarifa registrada**; si hay sesiones sin tarifa se marca «costo incompleto».
 No se transfieren automáticamente importes a los precios de venta, reparto, nómina, caja ni contabilidad, ni se modifican inventarios.
 Los pedidos cerrados no admiten cambios en tiempos. Antes de publicar: realizar copia de seguridad y comprobar compilación (`npm ci && npm run build`), que no se pudo completar en el entorno offline.
+
+## Etapa 9: rediseño «Taller creativo» y seguimiento operativo
+
+- Diseño responsivo claro, con violeta y acentos CMY, navegación inferior en teléfonos y tarjetas de inicio.
+- Agenda del taller, rutas de producción por trabajo, tiempos reales y fichas de rentabilidad por pedido.
+- Registro de consumo real de materiales y merma, independiente del cálculo previsto.
+- Nube: bases locales separadas por cuenta, comprobación de respaldos, control de conflictos y pruebas de concurrencia. La aplicación del esquema RLS debe verificarse directamente en Supabase.
+
+## Etapa 10: duplicar cotizaciones y descuentos por cantidad
+
+- En **Cotizaciones** puedes pulsar **Duplicar**. Se crea una nueva cotización en estado **Borrador**, con número y fecha nuevos, manteniendo cliente, trabajos y materiales. No se duplica ni modifica el pedido original ni se hereda un cálculo guardado.
+- También hay un botón **Duplicar** dentro de la cotización. Copia su última **versión guardada**: guarda primero cualquier cambio que desees conservar.
+- En cada trabajo, **Precios por cantidad**, agrega escalones con *Desde (unidades)* y *Descuento adicional (%)*. Se aplica **solo el umbral más alto alcanzado**, nunca se suman varios escalones.
+- El descuento por cantidad se combina con el descuento manual de forma multiplicativa. Por ejemplo, un 10 % manual y un 5 % por volumen dan un 14,5 % efectivo, no un 15 %.
+- Los descuentos solo modifican el **precio de venta**, no los costos calculados de materiales, máquinas, mano de obra ni costos fijos. Revisa la ganancia y el margen real antes de aceptar un trabajo.
+- Los escalones inválidos o repetidos bloquean guardar y crear pedido. El PDF muestra el descuento por cantidad y el descuento total.
+- Las cotizaciones antiguas, sin escalones configurados, mantienen el cálculo anterior. Esta ampliación no cambia el esquema de IndexedDB.
+
+### Seguridad de datos y migración
+
+Antes de trabajar con una nueva versión, exporta un respaldo desde Configuración. No subas ZIP de etapas antiguas sobre el código actual; trabaja desde `main` y usa ramas de prueba. La sincronización en vivo entre dos cuentas y las políticas RLS de Supabase requieren una verificación independiente de las pruebas automatizadas.
