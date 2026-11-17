@@ -179,7 +179,20 @@ async function prepararBaseCuentaInterna(uid, confirmarLegado) {
 
   // Si existe la base individual, nunca se vuelve a migrar desde la base antigua.
   // Esto preserva todos los cambios hechos después de la primera apertura.
-  const yaExiste = await Dexie.exists(nombre)
+  let yaExiste = await Dexie.exists(nombre)
+  if (yaExiste) {
+    // Si una pestaña se cerró durante una migración, la base pudo quedar creada
+    // pero sin registros. En ese caso es seguro reintentar la copia del legado.
+    const inspeccion = crearBase(nombre)
+    try {
+      const vacia = await inspeccion.transaction('r', TABLAS.map(t => inspeccion[t]), async () =>
+        (await Promise.all(TABLAS.map(t => inspeccion[t].count()))).every(n => n === 0)
+      )
+      if (vacia) yaExiste = false
+    } finally {
+      inspeccion.close()
+    }
+  }
   if (!yaExiste) {
     const legada = db.name === NOMBRE_BASE_LEGADA ? db : crearBase(NOMBRE_BASE_LEGADA)
     try {
