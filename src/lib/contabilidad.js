@@ -117,7 +117,7 @@ export function generarAsientos(datos, hasta = new Date()) {
     const fEntrega = entregaH ? fechaLocal(entregaH.fecha) : null
 
     // En días iguales la venta va antes que los cobros (el orden se conserva al ordenar por fecha).
-    const anticipos = (p.abonos || []).filter((a) => !(fEntrega && a.fecha >= fEntrega)).reduce((s, a) => s + n(a.monto), 0)
+    const anticipos = (p.abonos || []).filter((a) => !a.anulado && !(fEntrega && a.fecha >= fEntrega)).reduce((s, a) => s + n(a.monto), 0)
 
     if (fEntrega) {
       const porLinea = new Map()
@@ -141,7 +141,7 @@ export function generarAsientos(datos, hasta = new Date()) {
         ]))
     }
 
-    for (const a of p.abonos || []) {
+    for (const a of (p.abonos || []).filter((a) => !a.anulado)) {
       const despues = fEntrega && a.fecha >= fEntrega
       push(asiento(a.fecha, `Cobro ${cod}${p.cliente ? ' · ' + p.cliente : ''}`, { tipo: 'pedido', id: p.id }, [
         { cuenta: cuentaDisponible(a.metodo), debe: a.monto },
