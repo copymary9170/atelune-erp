@@ -19,6 +19,7 @@ import Contactos from './pages/Contactos.jsx'
 import Gastos from './pages/Gastos.jsx'
 import Caja from './pages/Caja.jsx'
 import ReportesRentabilidad from './pages/ReportesRentabilidad.jsx'
+import CuentasPorCobrar from './pages/CuentasPorCobrar.jsx'
 import Contabilidad from './pages/Contabilidad.jsx'
 import Reparto from './pages/Reparto.jsx'
 
@@ -37,6 +38,7 @@ const MENU = [
   { seccion: 'Finanzas' },
   { to: '/gastos', icono: 'M3 6h18v12H3zM3 10h18M7 15h4', label: 'Gastos y pagos' },
   { to: '/caja', icono: 'M3 7h18v13H3zM3 7l3-3h15M7 12h10M7 16h6', label: 'Caja y arqueo' },
+  { to: '/cuentas-por-cobrar', icono: 'M3 6h18v12H3zM7 10h10M7 14h6', label: 'Cuentas por cobrar' },
   { to: '/reparto', icono: 'M12 3v9h9A9 9 0 1 1 12 3M15 3.5A9 9 0 0 1 20.5 9H15z', label: 'Reparto de utilidades' },
   { to: '/contabilidad', icono: 'M5 3h14v18H5zM9 7h6M9 11h6M9 15h3', label: 'Contabilidad' },
   { to: '/reportes-rentabilidad', icono: 'M3 20V10h4v10M10 20V4h4v16M17 20v-7h4v7', label: 'Reportes de rentabilidad' },
@@ -181,6 +183,7 @@ function Interfaz() {
           <Route path="/proveedores" element={<Contactos tipo="proveedores" key="proveedores" />} />
           <Route path="/gastos" element={<Gastos />} />
           <Route path="/caja" element={<Caja />} />
+          <Route path="/cuentas-por-cobrar" element={<CuentasPorCobrar />} />
           <Route path="/reparto" element={<Reparto />} />
           <Route path="/contabilidad" element={<Contabilidad />} />
           <Route path="/reportes-rentabilidad" element={<ReportesRentabilidad />} />
