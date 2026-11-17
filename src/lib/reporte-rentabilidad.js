@@ -3,19 +3,34 @@
 // Costos y utilidad son los PRESUPUESTADOS congelados en cada pedido.
 // No equivalen a utilidad fiscal, beneficio neto del negocio ni efectivo cobrado.
 const numero = x => typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : null
-const suma = (a, b) => a + b
 const red = v => Math.round((v + Number.EPSILON) * 100) / 100
+
+function fechaValida(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  const [anio, mes, dia] = s.split('-').map(Number)
+  if (anio < 1 || mes < 1 || mes > 12 || dia < 1 || dia > 31) return false
+  const d = new Date(0)
+  d.setUTCFullYear(anio, mes - 1, dia)
+  return d.getUTCFullYear() === anio && d.getUTCMonth() === mes - 1 && d.getUTCDate() === dia
+}
 
 export function fechaEntregaPedido(pedido) {
   if (pedido?.estado !== 'entregado') return null
-  const h = [...(pedido.historial || [])].reverse().find(e => e.estado === 'entregado' && e.fecha)
-  if (!h) return null
-  if (/^\d{4}-\d{2}-\d{2}$/.test(h.fecha)) return h.fecha
+  const historial = Array.isArray(pedido.historial) ? pedido.historial : []
+  const h = [...historial].reverse().find(e => e?.estado === 'entregado' && e.fecha)
+  if (!h || typeof h.fecha !== 'string') return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(h.fecha)) return fechaValida(h.fecha) ? h.fecha : null
+  // Rechazar fechas imposibles en el origen; Date puede normalizar 30/feb a marzo.
+  const prefijo = /^\d{4}-\d{2}-\d{2}/.exec(h.fecha)?.[0]
+  if (!prefijo || !fechaValida(prefijo)) return null
+  // Convertir el timestamp al día local igual que Contabilidad y la interfaz.
+  // Esto evita desplazar entregas cerca de medianoche a un mes equivocado.
   const d = new Date(h.fecha)
   if (Number.isNaN(d.getTime())) return null
-  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+  const local = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+  return fechaValida(local) ? local : null
 }
-function fechaValida(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) }
+
 function agregar(mapa, clave, nombre, venta, costo, cantidad = 0) {
   let v = mapa.get(clave)
   if (!v) { v = { clave, nombre, venta: 0, costo: 0, cantidad: 0, trabajos: 0 }; mapa.set(clave, v) }

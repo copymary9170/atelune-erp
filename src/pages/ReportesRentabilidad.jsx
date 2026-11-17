@@ -5,6 +5,7 @@ import { db } from '../db.js'
 import { Campo, useConfig } from '../components/ui.jsx'
 import { usd, fecha, hoy } from '../lib/format.js'
 import { reporteRentabilidad } from '../lib/reporte-rentabilidad.js'
+import { generarCsvRentabilidad } from '../lib/exportar-rentabilidad.js'
 
 const inicioMes = () => hoy().slice(0, 8) + '01'
 const dinero = x => x === null || x === undefined ? 'Pendiente' : usd(x)
@@ -29,26 +30,14 @@ function TablaRentabilidad({ titulo, filas, vacio, columnaCantidad = false }) {
 }
 
 function exportarCsv(r) {
-  // Exportación sin bibliotecas ni cambios en la base. UTF-8 + BOM para Excel.
-  const columnas = ['Pedido', 'Fecha de entrega', 'Cliente', 'Ventas trabajos USD', 'Costo presupuestado USD', 'Utilidad presupuestada USD', 'Margen %', 'Incompleto']
-  // Evitar ejecutar fórmulas de hojas de cálculo introducidas en nombres de clientes.
-  const escapar = v => {
-    const t = v == null ? '' : String(v)
-    const seguro = typeof v === 'string' && /^[=+@\\-\\t\\r]/.test(t) ? "'" + t : t
-    return '"' + seguro.replaceAll('"', '""') + '"'
-  }
-  const filas = [columnas, ...r.filas.map(f => [
-    'PED-' + String(f.numero).padStart(4, '0'), f.fecha, f.cliente, f.venta, f.costo,
-    f.utilidad, f.margenPct, f.incompleto ? 'Sí' : 'No',
-  ])]
-  const csv = '\uFEFF' + filas.map(f => f.map(escapar).join(';')).join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const blob = new Blob([generarCsvRentabilidad(r)], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
   a.download = 'atelune-rentabilidad-pedidos.csv'
   a.click()
-  URL.revokeObjectURL(url)
+  // Dar oportunidad al navegador a iniciar la descarga antes de liberar el URL.
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 export default function ReportesRentabilidad() {
