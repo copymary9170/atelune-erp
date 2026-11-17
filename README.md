@@ -155,3 +155,12 @@ Antes de trabajar con una nueva versión, exporta un respaldo desde Configuraci�
 - Los pedidos abiertos aparecen únicamente como **presupuestos no realizados**, separados de ventas entregadas y de los cobros.
 - Se pueden exportar los pedidos filtrados a **CSV compatible con Excel**, sin modificar ningún registro.
 - Para utilidad contable del negocio, utilizar **Contabilidad → Estado de resultados**. Esta pantalla es auxiliar de análisis comercial y no modifica inventario, caja, reparto ni asientos.
+
+## Etapa 13 (en prueba): cuentas por cobrar
+
+- Pantalla **Finanzas → Cuentas por cobrar**, con saldos actuales de pedidos, abonos vigentes, clasificación por fecha prevista de entrega y enlaces al detalle de cada pedido.
+- Clasifica importes en **vencidos**, **por vencer** y **sin fecha**, con seguimiento separado de los pedidos ya entregados que todavía tienen saldo.
+- Excluye pedidos cancelados y abonos anulados; marca los pedidos con total o abonos inválidos y no les atribuye deudas ficticias.
+- Los sobrepagos se muestran como advertencia y no compensan las deudas de otros pedidos.
+- La fecha de referencia seleccionada se utiliza solo para **clasificar vencimientos**. Los saldos reflejan los abonos existentes hoy; no reconstruye la cartera histórica de una fecha pasada.
+- No genera pagos, intereses, asientos contables ni movimientos de caja. Los importes se muestran en USD, tal como se guardaron en los pedidos.
