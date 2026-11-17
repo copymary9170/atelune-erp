@@ -2,7 +2,7 @@
 // solo en este navegador, como en las etapas anteriores.
 import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
-import { db, exportarDatos, importarRespaldo, tieneDatos, TABLAS } from './db.js'
+import { db, exportarDatos, importarRespaldo, validarRespaldo, tieneDatos, TABLAS } from './db.js'
 import { crearSincronizador } from './lib/sincronizador.js'
 
 // Vercel + Supabase crea estas variables. Solo se leen la URL y la clave pública (anon):
@@ -68,6 +68,10 @@ function remotoSupabase(uid) {
     async leer() {
       const { data, error } = await supabase.from(TABLA).select('datos, version').eq('user_id', uid).maybeSingle()
       if (error) throw error
+      if (data) {
+        if (!Number.isSafeInteger(data.version) || data.version < 1) throw new Error('Versión de copia remota inválida.')
+        validarRespaldo(data.datos)
+      }
       return data
     },
     async insertar(datos) {
@@ -114,7 +118,7 @@ export function iniciarNube(uid) {
     remoto: remotoSupabase(uid),
     local: {
       exportar: () => exportarDatos({ origen: baseDeSesion }),
-      importar: (datos) => importarRespaldo({ ...datos, app: 'atelune-erp' }, { destino: baseDeSesion }),
+      importar: (datos) => importarRespaldo(datos, { destino: baseDeSesion }),
       tieneDatos: () => tieneDatos({ origen: baseDeSesion }),
     },
     meta: metaPara(uid),
