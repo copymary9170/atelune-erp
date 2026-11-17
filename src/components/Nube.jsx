@@ -45,7 +45,7 @@ export function IndicadorNube() {
   const [icono, texto] = TEXTO[fase] || TEXTO.inactivo
   return (
     <button className="sec mini indicador-nube" onClick={() => sincronizarAhora()} title="Sincronizar ahora"
-      style={{ color: 'var(--papel)', borderColor: 'rgba(239,227,205,.2)', opacity: .8, whiteSpace: 'normal', textAlign: 'left' }}>
+      style={{ whiteSpace: 'normal', textAlign: 'left', justifyContent: 'flex-start' }}>
       {icono} {texto}
     </button>
   )

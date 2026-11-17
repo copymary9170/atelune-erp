@@ -92,3 +92,22 @@ npm run build    # versión para publicar (carpeta dist/)
 Los cálculos están en `src/lib/calc.js` y se prueban en `tests/calc.test.js`.
 
 > Los reportes son de gestión interna; los temas fiscales deben validarse con un contador.
+
+## Seguimiento de producción por trabajo (mejora nueva)
+
+En **Pedidos y producción → abrir pedido → Etapas por trabajo** puedes escoger la ruta de cada renglón: impresión, topper/papelería creativa, sublimación, personalizado/vinil o reventa. Marca tareas en orden y consulta el progreso por trabajo. La **Agenda del taller** muestra el número de trabajos sin ruta, en curso y terminados.
+
+- La ruta se almacena dentro de `pedido.produccionEtapas` y se incluye en la exportación y sincronización del pedido; no necesita migración de IndexedDB.
+- Las etapas son seguimiento operativo y **no generan** gastos, consumos, costos, pagos ni cambios automáticos de estado. Para descontar materiales debes pasar el pedido a su estado general de producción conforme a las reglas existentes.
+- Al cambiar una ruta con tareas completadas se solicita confirmación; volver a abrir una tarea también reabre las posteriores.
+- Pedidos entregados y cancelados solo permiten consultar la ruta guardada.
+- Para ejecutar las pruebas: `npm test`. Para compilar, instalar dependencias con `npm ci` y luego `npm run build`.
+
+## Registro de tiempos reales (mejora incremental)
+
+En el detalle de pedido, tras «Etapas por trabajo», aparece «Tiempo real de mano de obra».
+Se registra por renglón/etapa la persona responsable, minutos, una tarifa horaria opcional en USD y una nota.
+Los datos se almacenan en `pedido.tiemposProduccion`, separado de `pedido.produccionEtapas`.
+El costo mostrado es únicamente la suma de sesiones **con tarifa registrada**; si hay sesiones sin tarifa se marca «costo incompleto».
+No se transfieren automáticamente importes a los precios de venta, reparto, nómina, caja ni contabilidad, ni se modifican inventarios.
+Los pedidos cerrados no admiten cambios en tiempos. Antes de publicar: realizar copia de seguridad y comprobar compilación (`npm ci && npm run build`), que no se pudo completar en el entorno offline.

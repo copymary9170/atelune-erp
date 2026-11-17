@@ -1,15 +1,23 @@
+import { useId } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, CONFIG_INICIAL } from '../db.js'
 
-// Luna creciente que sostiene un libro abierto: el logo de Atelune.
-export function Logo({ size = 34, claro = true }) {
+// Logo de Atelune: una luna creciente sobre un cuadro violeta, con los tres puntos de la impresión (cian, magenta, amarillo).
+export function Logo({ size = 34 }) {
+  const g = 'atelune-g' + useId().replace(/\W/g, '')
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" fill="none">
-      <path d="M43 5a27 27 0 1 0 17 45A23 23 0 1 1 43 5z" fill="#b8955a" />
-      <path d="M13 29c6.5-3.2 12.5-2.8 19 1 6.5-3.8 12.5-4.2 19-1v20c-6.5-3.2-12.5-2.8-19 1-6.5-3.8-12.5-4.2-19-1z"
-        fill={claro ? '#fffdfa' : '#fffdfa'} stroke="#1d2340" strokeWidth="1.6" strokeLinejoin="round" />
-      <path d="M32 30v20" stroke="#1d2340" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M19 34.5c3.5-1 6.8-.7 9.5.9M36 35.4c2.7-1.6 6-1.9 9.5-.9" stroke="#b8955a" strokeWidth="1.4" strokeLinecap="round" />
+      <defs>
+        <linearGradient id={g} x1="6" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#6a4bff" />
+          <stop offset="1" stopColor="#b24ad8" />
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" rx="18" fill={`url(#${g})`} />
+      <path d="M38 12a21 21 0 1 0 13 33A17.5 17.5 0 1 1 38 12z" fill="#fff" />
+      <circle cx="44" cy="22" r="3.4" fill="#0fb5d9" />
+      <circle cx="49.5" cy="31" r="3.4" fill="#ee3f95" />
+      <circle cx="42" cy="41" r="3.4" fill="#f7b500" />
     </svg>
   )
 }
