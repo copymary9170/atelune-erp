@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { nubeConfigurada, useSesion, iniciarNube, detenerNube, supabase, reiniciarMetaCuenta } from './nube.js'
 import { prepararBaseCuenta } from './db.js'
 import { Acceso, IndicadorNube, ConflictoNube } from './components/Nube.jsx'
@@ -48,6 +48,8 @@ const PROXIMAMENTE = ['Reportes de rentabilidad']
 export default function App() {
   const sesion = useSesion()
   const uid = sesion?.user?.id
+  const uidActual = useRef(uid)
+  uidActual.current = uid
   const [cuentaLocal, setCuentaLocal] = useState({ uid: null, fase: 'comprobando', detalle: '' })
 
   useEffect(() => {
@@ -76,16 +78,20 @@ export default function App() {
   }, [uid])
 
   async function confirmarPropiedad() {
+    const uidConfirmada = uid
     setCuentaLocal({ uid, fase: 'comprobando', detalle: '' })
     try {
       // El consentimiento sólo se aplica a la base antigua, que no se borra.
-      const resultado = await prepararBaseCuenta(uid, { confirmarLegado: true })
+      const resultado = await prepararBaseCuenta(uidConfirmada, { confirmarLegado: true })
+      // La cuenta pudo cambiar mientras se copiaban los datos: no arrancar la
+      // sincronización de la sesión anterior ni mostrar su base en otra sesión.
+      if (uidActual.current !== uidConfirmada) return
       if (resultado.estado !== 'lista') throw new Error('No se pudo completar la migración de datos.')
-      if (resultado.nueva && !resultado.migrada) reiniciarMetaCuenta(uid)
-      setCuentaLocal({ uid, fase: 'permitida', detalle: '' })
-      iniciarNube(uid)
+      if (resultado.nueva && !resultado.migrada) reiniciarMetaCuenta(uidConfirmada)
+      setCuentaLocal({ uid: uidConfirmada, fase: 'permitida', detalle: '' })
+      iniciarNube(uidConfirmada)
     } catch (error) {
-      setCuentaLocal({ uid, fase: 'bloqueada', detalle: error.message })
+      if (uidActual.current === uidConfirmada) setCuentaLocal({ uid: uidConfirmada, fase: 'bloqueada', detalle: error.message })
     }
   }
 
