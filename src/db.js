@@ -116,7 +116,7 @@ export async function tasaVigente() {
 
 // ---------- Inventario ----------
 
-export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen }) {
+export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen, tasa }) {
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     const p = await db.productos.get(productoId)
     if (!p) throw new Error('Producto no encontrado')
@@ -133,6 +133,7 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
       pedidoId: pedidoId ?? null,
       proveedorId: proveedorId ?? null,
       pagadoCon: pagadoCon ?? null,
+      tasa: tasa == null ? null : Number(tasa),
       origen: origen ?? null,
       stockResultante: r.stock,
       costoPromedioResultante: r.costoPromedio,
@@ -457,12 +458,12 @@ export async function agregarDatos(datos) {
 
 // ---------- Compra de varios materiales ----------
 /** lineas: [{ productoId, cantidadUso, costoTotal }] con el delivery ya incluido en costoTotal. */
-export async function registrarCompra({ lineas, fecha, proveedorId, pagadoCon, referencia, nota }) {
+export async function registrarCompra({ lineas, fecha, proveedorId, pagadoCon, referencia, nota, tasa }) {
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     for (const l of lineas)
       await registrarMovimiento({
         productoId: l.productoId, tipo: 'entrada', cantidad: l.cantidadUso, costoUnitario: l.costoTotal / l.cantidadUso,
-        fecha, proveedorId, pagadoCon, referencia, nota,
+        fecha, proveedorId, pagadoCon, referencia, nota, tasa,
       })
   })
 }
