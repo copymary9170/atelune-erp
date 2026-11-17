@@ -1,3 +1,5 @@
+import { descuentoPorCantidad } from './escalas-cotizaciones.js'
+
 // Cálculos puros (sin base de datos), probados en calc.test.js.
 // Todos los montos están en dólares (USD). Los bolívares se obtienen con la tasa del día.
 
@@ -142,8 +144,12 @@ export function calcularCotizacion(cot, { productos, activos, config }) {
     const linea = lineas.find((l) => l.id === Number(it.lineaId))
     const margen = it.margenPct !== '' && it.margenPct != null ? n(it.margenPct) : n(linea?.margenPct)
     const precioLista = precioDesdeMargen(costo, margen)
-    const descuento = precioLista * (n(it.descuentoPct) / 100)
-    const precio = precioLista - descuento
+    const escala = descuentoPorCantidad(it.cantidad, it.escalasCantidad)
+    // Descuento manual y por volumen se combinan multiplicativamente; los
+    // tramos NO se acumulan. Ningún descuento altera los costos reales.
+    const manual = Math.min(100, Math.max(0, n(it.descuentoPct)))
+    const precio = precioLista * (1 - manual / 100) * (1 - escala.descuentoPct / 100)
+    const descuento = precioLista - precio
     const cant = n(it.cantidad)
     return {
       ...d,
@@ -152,6 +158,8 @@ export function calcularCotizacion(cot, { productos, activos, config }) {
       margenPct: margen,
       precioLista,
       descuento,
+      descuentoCantidadPct: escala.descuentoPct,
+      umbralCantidad: escala.desde,
       precio,
       precioUnitario: cant > 0 ? precio / cant : 0,
       ganancia: precio - costo,
