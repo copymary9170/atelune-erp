@@ -1,0 +1,59 @@
+name: Integrar y probar Atelune ERP
+on:
+  push:
+    branches: [mejoras-integrales-seguridad-produccion]
+    paths:
+      - '.github/workflows/integrar-atelune.yml'
+      - 'tools/aplicar_correcciones.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Preparar la versión completa desde el ZIP existente
+        run: |
+          set -euo pipefail
+          mkdir -p temporal
+          unzip -q atelune-erp-mejora-materiales-merma.zip -d temporal
+          cp -a temporal/atelune-erp/. .
+          rm -rf temporal
+          python3 tools/aplicar_correcciones.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run build
+      - name: Comprobar que no se agreguen datos sensibles comunes
+        run: |
+          if find src tests -type f \( -name '.env' -o -name '*.pem' -o -name 'credentials.json' \) | grep -q .; then exit 1; fi
+  integrar:
+    needs: validar
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          ref: mejoras-integrales-seguridad-produccion
+      - name: Aplicar exactamente la versión probada
+        run: |
+          set -euo pipefail
+          mkdir -p temporal
+          unzip -q atelune-erp-mejora-materiales-merma.zip -d temporal
+          cp -a temporal/atelune-erp/. .
+          rm -rf temporal
+          python3 tools/aplicar_correcciones.py
+          git config user.name 'atelune-integracion[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md MEJORAS_MERMA.md MEJORAS_RENTABILIDAD.md REVISION_SEGURIDAD.md package.json package-lock.json src tests public index.html vite.config.js supabase datos
+          if git diff --cached --quiet; then echo 'No hay cambios'; exit 0; fi
+          git commit -m 'Integrar agenda, producción, tiempos, rentabilidad y merma con correcciones'
+          git push origin HEAD:mejoras-integrales-seguridad-produccion
