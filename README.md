@@ -164,3 +164,11 @@ Antes de trabajar con una nueva versión, exporta un respaldo desde Configuraci�
 - Los sobrepagos se muestran como advertencia y no compensan las deudas de otros pedidos.
 - La fecha de referencia seleccionada se utiliza solo para **clasificar vencimientos**. Los saldos reflejan los abonos existentes hoy; no reconstruye la cartera histórica de una fecha pasada.
 - No genera pagos, intereses, asientos contables ni movimientos de caja. Los importes se muestran en USD, tal como se guardaron en los pedidos.
+
+## Etapa 14 (en prueba): seguimiento de cobranza por cliente
+
+- En **Finanzas → Cuentas por cobrar** se añade una tabla con el total pendiente por cliente, cantidad de pedidos pendientes, saldo correspondiente a pedidos entregados y saldo de pedidos cuya fecha de entrega prevista ya pasó.
+- Agrupa por **clienteId** cuando existe; de lo contrario por nombre normalizado. **Los pedidos sin nombre se mantienen separados** para no mezclar deudas de personas diferentes.
+- Los saldos de la agrupación corresponden a los pedidos con total y abonos válidos. Los abonos anulados y los pedidos cancelados no se contabilizan y los sobrepagos no se compensan contra otros pedidos.
+- Se corrige la terminología: **fecha prevista de entrega ≠ fecha de vencimiento de pago**. Se muestra expresamente «entrega prevista pasada» en vez de afirmar que una deuda está legalmente vencida.
+- Es un informe de solo lectura; no envía mensajes, no crea intereses ni modifica la base o los pedidos.
