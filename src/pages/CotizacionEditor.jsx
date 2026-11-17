@@ -31,7 +31,7 @@ export default function CotizacionEditor() {
   const [abierto, setAbierto] = useState(0)
   const [aviso, setAviso] = useState('')
 
-  useEffect(() => { if (guardada && !c) setC(guardada) }, [guardada, c])
+  useEffect(() => { if (guardada && guardada.id === Number(id) && c?.id !== guardada.id) setC(guardada) }, [guardada, id, c])
 
   const r = useMemo(() => (c ? calcularCotizacion(c, datos) : null), [c, datos])
   const avisos = useMemo(() => (c ? avisosCotizacion(c, datos) : []), [c, datos])
