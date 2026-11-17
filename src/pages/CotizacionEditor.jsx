@@ -38,7 +38,10 @@ export default function CotizacionEditor() {
   const faltantes = useMemo(() => (c ? faltantesDeCosto(c, datos) : []), [c, datos])
   const escalasConError = c?.items?.some(it => escalasInvalidas(it.escalasCantidad || [])) ?? false
 
-  if (guardada === undefined && !c) return <p className="muted">Cargando…</p>
+  // Al navegar desde una cotización a su duplicado, no mostrar ni guardar
+  // accidentalmente el estado del documento anterior durante la transición.
+  if ((guardada === undefined && !c) || (c && c.id !== Number(id)))
+    return <p className="muted">Cargando cotización…</p>
   if (!c) return <p>No se encontró la cotización.</p>
 
   const set = (k, v) => setC((x) => ({ ...x, [k]: v }))
