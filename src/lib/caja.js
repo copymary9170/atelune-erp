@@ -18,7 +18,7 @@ export function resumenMovimientosCaja({ pedidos = [], gastos = [], movimientos 
   const registros = []
   const convertir = (monto, tasa, origen, id, signo, detalle) => {
     const usd = Number(monto)
-    if (!Number.isFinite(usd) || usd < 0) {
+    if (monto == null || monto === '' || !Number.isFinite(usd) || usd < 0) {
       registros.push({ origen, id, detalle, estado: 'importe_invalido', signo, importe: null })
       return
     }
