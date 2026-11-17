@@ -101,9 +101,10 @@ export function PedidoDetalle() {
     if (estado === p.estado) return
     if (ESTADOS_CON_CONSUMO.includes(estado) && !p.inventarioDescontado && consumo.length &&
       !confirm('Al pasar a este estado se descontarán del inventario los materiales del pedido. ¿Continuar?')) return
-    if (estado === 'cancelado' && !confirm('¿Cancelar el pedido?' + (p.inventarioDescontado ? ' Los materiales descontados volverán al inventario.' : ''))) return
+    if (estado === 'cancelado' && !confirm('¿Cancelar el pedido? Los materiales usados NO volverán automáticamente al inventario.')) return
+    const devolverInventario = estado === 'cancelado' && p.inventarioDescontado && confirm('¿Recuperaste físicamente TODOS los materiales descontados? Aceptar: devolverlos al inventario. Cancelar: cancelar SIN devolver stock. Para devoluciones parciales, registra el reingreso en Inventario.')
     setOcupado(true)
-    try { await cambiarEstadoPedido(p.id, estado) } catch (e) { alert(e.message) }
+    try { await cambiarEstadoPedido(p.id, estado, { devolverInventario }) } catch (e) { alert(e.message) }
     setOcupado(false)
   }
 
