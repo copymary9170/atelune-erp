@@ -78,6 +78,7 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
     ocupado = true
     estado('sincronizando')
     try {
+      let confirmado = false
       for (let intento = 0; intento < 3; intento++) {
         // Leer el estado local DESPUÉS de la consulta remota. Durante la espera pueden
         // producirse ediciones; usar una copia anterior permitiría sobrescribirlas.
@@ -100,9 +101,12 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
         } else if (m.sucio || r.version < m.version) {
           if (!(await subir(r.version))) continue // cambió entre leer y subir: reintentar
         }
+        confirmado = true
         break
       }
       asegurarActivo()
+      // Nunca declarar sincronizado algo que Supabase no confirmó.
+      if (!confirmado) throw new Error('La copia remota cambió repetidamente; no se pudo confirmar el guardado. Conserva el respaldo local y vuelve a sincronizar.')
       estado(meta.get().sucio ? 'sincronizando' : 'ok', meta.get())
     } catch (e) {
       if (activo) estado(esErrorDeRed(e) ? 'sin_conexion' : 'error', e)
