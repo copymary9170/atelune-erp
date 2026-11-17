@@ -107,13 +107,15 @@ export function iniciarNube(uid) {
   if (sinc?.uid === uid) return sinc.sincronizar()
   sinc?.detener()
   instalarHooks()
+  // Fijar la base por instancia: una respuesta tardía de la cuenta A nunca
+  // debe escribir sobre la base actualmente seleccionada para la cuenta B.
+  const baseDeSesion = db
   sinc = crearSincronizador({
     remoto: remotoSupabase(uid),
     local: {
-      exportar: exportarDatos,
-      // La configuración de este dispositivo no se pisa con el respaldo local; se trae la de la nube.
-      importar: (datos) => importarRespaldo({ ...datos, app: 'atelune-erp' }),
-      tieneDatos,
+      exportar: () => exportarDatos({ origen: baseDeSesion }),
+      importar: (datos) => importarRespaldo({ ...datos, app: 'atelune-erp' }, { destino: baseDeSesion }),
+      tieneDatos: () => tieneDatos({ origen: baseDeSesion }),
     },
     meta: metaPara(uid),
     alEstado: setEstado,
