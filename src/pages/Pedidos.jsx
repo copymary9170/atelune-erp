@@ -5,6 +5,10 @@ import { db, ESTADOS_PEDIDO, ESTADOS_CON_CONSUMO, codigoPedido, cambiarEstadoPed
 import { Campo, Selector, Modal, useConfig } from '../components/ui.jsx'
 import { codigo } from './Cotizaciones.jsx'
 import RepartoPedido from '../components/RepartoPedido.jsx'
+import FlujoProduccion from '../components/FlujoProduccion.jsx'
+import TiemposProduccion from '../components/TiemposProduccion.jsx'
+import FichaRentabilidad from '../components/FichaRentabilidad.jsx'
+import ConsumoMateriales from '../components/ConsumoMateriales.jsx'
 import { consumoPedido, saldoPedido, totalAbonos, n } from '../lib/calc.js'
 import { usd, bs, num, fecha, hoy } from '../lib/format.js'
 
@@ -173,9 +177,9 @@ export function PedidoDetalle() {
             <tbody>
               {(p.abonos || []).map((a, i) => (
                 <tr key={i}>
-                  <td>{fecha(a.fecha)}{a.anulado && <span className="etiqueta-tipo bajo"> Anulado</span>}<div className="desglose">{a.metodo}{a.nota && ' · ' + a.nota}{a.anulado && a.motivoAnulacion && ' · Motivo: ' + a.motivoAnulacion}</div></td>
+                  <td>{fecha(a.fecha)}{a.anulado && <span className="etiqueta-tipo bajo">Anulado</span>}<div className="desglose">{a.metodo}{a.nota && ' · ' + a.nota}{a.anulado && a.motivoAnulacion && ' · Motivo: ' + a.motivoAnulacion}</div></td>
                   <td className="num">{a.anulado ? <s>{usd(a.monto)}</s> : usd(a.monto)}{a.tasa ? <div className="desglose">{bs(n(a.monto) * n(a.tasa))}</div> : null}</td>
-                  <td className="num">{!a.anulado && <button className="peligro mini" onClick={async () => { const motivo = prompt('Motivo de anulación:'); if (!motivo?.trim()) return; await db.transaction('rw', db.pedidos, async () => { const actual = await db.pedidos.get(p.id); const abonos = [...(actual.abonos || [])]; if (abonos[i]?.anulado) return; abonos[i] = { ...abonos[i], anulado: true, motivoAnulacion: motivo.trim().slice(0, 300), fechaAnulacion: new Date().toISOString() }; await db.pedidos.update(p.id, { abonos }) }) }}>Anular</button>}</td>
+                  <td className="num">{!a.anulado && <button className="peligro mini" onClick={async () => { const motivo = prompt('Motivo de anulación del pago:'); if (!motivo?.trim()) return; await db.transaction('rw',db.pedidos,async () => { const actual = await db.pedidos.get(p.id); const abonos = [...(actual.abonos || [])]; if (abonos[i]?.anulado) return; abonos[i] = {...abonos[i], anulado:true, motivoAnulacion:motivo.trim().slice(0,300), fechaAnulacion:new Date().toISOString()}; await db.pedidos.update(p.id,{abonos}) }) }}>Anular</button>}</td>
                 </tr>
               ))}
               {!p.abonos?.length && <tr><td className="vacio">Aún no hay pagos.</td></tr>}
@@ -189,6 +193,11 @@ export function PedidoDetalle() {
           </table>
         </div>
       </div>
+
+      <FlujoProduccion pedido={p} />
+      <TiemposProduccion pedido={p} />
+      <ConsumoMateriales pedido={p} productos={productos} />
+      <FichaRentabilidad pedido={p} />
 
       <RepartoPedido pedido={p} config={config} />
 
@@ -216,8 +225,8 @@ function AbonoForm({ pedido, saldo, metodos, onCerrar }) {
   }
   async function guardar() {
     if (!(n(a.monto) > 0) || !Number.isFinite(Number(a.monto))) return alert('Monto inválido.')
-    if (!a.metodo) return alert('Selecciona el método de pago.')
-    await db.transaction('rw', db.pedidos, async () => { const actual = await db.pedidos.get(pedido.id); if (!actual || actual.estado === 'cancelado') throw new Error('Pedido cancelado'); await db.pedidos.update(pedido.id, { abonos: [...(actual.abonos || []), { ...a, registradoEn: new Date().toISOString() }] }) })
+    if (!a.metodo) return alert('Selecciona método de pago.')
+    await db.transaction('rw', db.pedidos, async () => { const actual = await db.pedidos.get(pedido.id); if (!actual || actual.estado === 'cancelado') throw new Error('Pedido cancelado'); await db.pedidos.update(pedido.id, { abonos: [...(actual.abonos || []), {...a, registradoEn:new Date().toISOString()}] }) })
     onCerrar()
   }
   return (

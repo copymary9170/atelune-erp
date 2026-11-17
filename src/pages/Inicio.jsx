@@ -9,6 +9,14 @@ import { codigo, ESTADOS } from './Cotizaciones.jsx'
 import { n, saldoPedido, personas } from '../lib/calc.js'
 import { usd, num, fecha, hoy } from '../lib/format.js'
 
+function Icono({ d, tono = '' }) {
+  return (
+    <span className={'kpi-icono ' + tono} aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+    </span>
+  )
+}
+
 export default function Inicio() {
   const config = useConfig()
   const tasa = useTasa()
@@ -42,19 +50,19 @@ export default function Inicio() {
 
   return (
     <>
-      <div className="encabezado">
+      <div className="bienvenida">
         <div>
           <h1>Hola, bienvenida a Atelune</h1>
           <p>Resumen de hoy, {fecha(hoy())}</p>
         </div>
-        <Link className="boton" to="/cotizaciones">Ir a cotizaciones</Link>
+        <Link className="boton" to="/cotizaciones">Nueva cotización →</Link>
       </div>
 
       <div className="grid g4">
-        <div className="tarjeta kpi"><div className="etiqueta">Tasa del día</div><div className="valor">{tasa ? num(tasa.tasa, 2) : '—'}</div><div className="desglose">{tasa ? `Bs/$ · ${fecha(tasa.fecha)}` : 'sin cargar'}</div></div>
-        <div className="tarjeta kpi"><div className="etiqueta">Pedidos pendientes</div><div className="valor">{activosPed.length}</div><div className="desglose">{delMes.length} cotizaciones este mes · {aprobadasMes.length} aprobadas</div></div>
-        <div className="tarjeta kpi"><div className="etiqueta">Por cobrar</div><div className="valor">{usd(porCobrar)}</div><div className="desglose">saldos de pedidos</div></div>
-        <div className="tarjeta kpi"><div className="etiqueta">Valor del inventario</div><div className="valor">{usd(valorInv)}</div><div className="desglose">{productos.length} productos</div></div>
+        <div className="tarjeta kpi"><Icono d="M4 8h14l-3-3M20 16H6l3 3" tono="amarillo" /><div className="etiqueta">Tasa del día</div><div className="valor">{tasa ? num(tasa.tasa, 2) : '—'}</div><div className="desglose">{tasa ? `Bs/$ · ${fecha(tasa.fecha)}` : 'sin cargar'}</div></div>
+        <div className="tarjeta kpi"><Icono d="M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10" tono="cian" /><div className="etiqueta">Pedidos pendientes</div><div className="valor">{activosPed.length}</div><div className="desglose">{delMes.length} cotizaciones este mes · {aprobadasMes.length} aprobadas</div></div>
+        <div className="tarjeta kpi"><Icono d="M3 6h18v12H3zM3 10h18M7 15h4" tono="magenta" /><div className="etiqueta">Por cobrar</div><div className="valor">{usd(porCobrar)}</div><div className="desglose">saldos de pedidos</div></div>
+        <div className="tarjeta kpi"><Icono d="M4 7h16v13H4zM4 7l2-4h12l2 4M9 12h6" /><div className="etiqueta">Valor del inventario</div><div className="valor">{usd(valorInv)}</div><div className="desglose">{productos.length} productos</div></div>
       </div>
 
       {resMes && (
@@ -89,7 +97,7 @@ export default function Inicio() {
       )}
 
       <div className="tarjeta">
-        <h2>Próximas entregas</h2>
+        <div className="encabezado"><h2>Próximas entregas</h2><Link to="/agenda" className="desglose">abrir agenda del taller →</Link></div>
         {activosPed.length ? (
           <table><tbody>{activosPed.slice(0, 8).map((p) => (
             <tr key={p.id}>
