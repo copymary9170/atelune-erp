@@ -173,9 +173,9 @@ export function PedidoDetalle() {
             <tbody>
               {(p.abonos || []).map((a, i) => (
                 <tr key={i}>
-                  <td>{fecha(a.fecha)}<div className="desglose">{a.metodo}{a.nota && ' · ' + a.nota}</div></td>
-                  <td className="num">{usd(a.monto)}{a.tasa ? <div className="desglose">{bs(n(a.monto) * n(a.tasa))}</div> : null}</td>
-                  <td className="num"><button className="peligro mini" onClick={() => confirm('¿Eliminar este pago?') && actualizar({ abonos: p.abonos.filter((_, j) => j !== i) })}>×</button></td>
+                  <td>{fecha(a.fecha)}{a.anulado && <span className="etiqueta-tipo bajo"> Anulado</span>}<div className="desglose">{a.metodo}{a.nota && ' · ' + a.nota}{a.anulado && a.motivoAnulacion && ' · Motivo: ' + a.motivoAnulacion}</div></td>
+                  <td className="num">{a.anulado ? <s>{usd(a.monto)}</s> : usd(a.monto)}{a.tasa ? <div className="desglose">{bs(n(a.monto) * n(a.tasa))}</div> : null}</td>
+                  <td className="num">{!a.anulado && <button className="peligro mini" onClick={async () => { const motivo = prompt('Motivo de anulación:'); if (!motivo?.trim()) return; await db.transaction('rw', db.pedidos, async () => { const actual = await db.pedidos.get(p.id); const abonos = [...(actual.abonos || [])]; if (abonos[i]?.anulado) return; abonos[i] = { ...abonos[i], anulado: true, motivoAnulacion: motivo.trim().slice(0, 300), fechaAnulacion: new Date().toISOString() }; await db.pedidos.update(p.id, { abonos }) }) }}>Anular</button>}</td>
                 </tr>
               ))}
               {!p.abonos?.length && <tr><td className="vacio">Aún no hay pagos.</td></tr>}
@@ -215,8 +215,9 @@ function AbonoForm({ pedido, saldo, metodos, onCerrar }) {
     else alert('No hay tasas cargadas.')
   }
   async function guardar() {
-    if (!(n(a.monto) > 0)) return alert('Escribe el monto en $.')
-    await db.pedidos.update(pedido.id, { abonos: [...(pedido.abonos || []), a] })
+    if (!(n(a.monto) > 0) || !Number.isFinite(Number(a.monto))) return alert('Monto inválido.')
+    if (!a.metodo) return alert('Selecciona el método de pago.')
+    await db.transaction('rw', db.pedidos, async () => { const actual = await db.pedidos.get(pedido.id); if (!actual || actual.estado === 'cancelado') throw new Error('Pedido cancelado'); await db.pedidos.update(pedido.id, { abonos: [...(actual.abonos || []), { ...a, registradoEn: new Date().toISOString() }] }) })
     onCerrar()
   }
   return (
