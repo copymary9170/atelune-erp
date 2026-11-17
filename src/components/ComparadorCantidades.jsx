@@ -1,9 +1,8 @@
 import { compararCantidadesCotizacion } from '../lib/comparador-cantidades.js'
 import { usd, num } from '../lib/format.js'
 
-// En tirajes altos el costo por hoja puede ser menor a un centavo.
-const usdUnitario = v => Number.isFinite(v)
-  ? '
+const usdUnitario = v => Number.isFinite(v) ? '$' + Number(v).toFixed(4) : '—'
+
 export default function ComparadorCantidades({ cotizacion, indice, datos }) {
   let comparacion
   try {
