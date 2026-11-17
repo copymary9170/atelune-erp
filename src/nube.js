@@ -100,6 +100,7 @@ function instalarHooks() {
 export function iniciarNube(uid) {
   if (!supabase || !uid) return
   if (sinc?.uid === uid) return sinc.sincronizar()
+  sinc?.detener()
   instalarHooks()
   sinc = crearSincronizador({
     remoto: remotoSupabase(uid),
@@ -117,6 +118,8 @@ export function iniciarNube(uid) {
 }
 
 export function detenerNube() {
+  sinc?.detener()
+  clearTimeout(temporizador)
   sinc = null
   setEstado('inactivo')
 }
