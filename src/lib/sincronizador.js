@@ -45,7 +45,8 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
     asegurarActivo()
     if (cambios !== marca) {
       conflicto = r
-      return estado('conflicto', r)
+      estado('conflicto', r)
+      return false
     }
     aplicandoRemoto = true
     try {
@@ -55,6 +56,7 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
     }
     asegurarActivo()
     meta.set({ version: r.version, sucio: cambios !== marca, ultimaSync: new Date().toISOString() })
+    return true
   }
 
   async function subir(versionEsperada) {
@@ -140,13 +142,13 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
         }
         // La elección explícita permite reemplazar la copia local, a diferencia
         // de una descarga automática. Revisar la versión una última vez primero.
-        await bajarElegido(actual, marcaEleccion)
+        if (!(await bajarElegido(actual, marcaEleccion))) return
       } else {
         const ok = await subir(r.version)
         if (!ok) { conflicto = await remoto.leer(); return estado('conflicto', conflicto) }
       }
       conflicto = null
-      estado('ok', meta.get())
+      estado(meta.get().sucio ? 'sincronizando' : 'ok', meta.get())
     },
   }
 }
