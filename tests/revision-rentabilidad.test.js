@@ -17,6 +17,8 @@ test('rechaza fechas de calendario imposibles y filtros inválidos', () => {
     assert.throws(() => reporteRentabilidad([], { desde: fecha }), /Rango/)
   }
   assert.equal(fechaEntregaPedido(pedido('2028-02-29')), '2028-02-29')
+  assert.equal(fechaEntregaPedido(pedido('2026-02-30T15:00:00.000Z')), null)
+  assert.equal(fechaEntregaPedido(pedido('2026-11-31T10:00:00.000Z')), null)
 })
 
 test('timestamp UTC alrededor de medianoche usa la fecha local, no UTC forzada', () => {
