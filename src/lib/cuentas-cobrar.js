@@ -41,9 +41,32 @@ export function reporteCuentasPorCobrar(pedidos, fechaReferencia) {
     } else if (tipo === 'sin_fecha') resumen.sinFecha = red(resumen.sinFecha + saldo)
     else resumen.porVencer = red(resumen.porVencer + saldo)
   }
+  // Agrupación por cliente: priorizar clienteId cuando está disponible.
+  // Un cliente sin nombre/ID no debe absorber las deudas de otros anónimos.
+  const mapaClientes = new Map()
+  for (const f of filas) {
+    const p = (pedidos || []).find(x => x.id === f.id)
+    const nombre = String(f.cliente || '').trim()
+    const tieneNombre = nombre && nombre !== 'Sin cliente'
+    const clave = p?.clienteId != null ? 'id:' + p.clienteId
+      : tieneNombre ? 'nombre:' + nombre.toLocaleLowerCase('es-VE').replace(/\s+/g, ' ')
+      : 'pedido:' + f.id
+    if (!mapaClientes.has(clave)) mapaClientes.set(clave, {
+      clave, nombre: tieneNombre ? nombre : 'Sin cliente (pedido ' + f.numero + ')',
+      totalPendiente: 0, entregadoPendiente: 0, fueraDeFechaEntrega: 0, pedidos: 0,
+    })
+    const grupo = mapaClientes.get(clave)
+    grupo.totalPendiente = red(grupo.totalPendiente + f.pendiente)
+    grupo.pedidos++
+    if (f.estado === 'entregado') grupo.entregadoPendiente = red(grupo.entregadoPendiente + f.pendiente)
+    if (f.clasificacion === 'vencido') grupo.fueraDeFechaEntrega = red(grupo.fueraDeFechaEntrega + f.pendiente)
+  }
+  const porCliente = [...mapaClientes.values()].sort((a,b) =>
+    b.totalPendiente - a.totalPendiente || a.nombre.localeCompare(b.nombre, 'es-VE'))
+
   filas.sort((a, b) => {
     const x = a.fechaEntrega || '9999-99-99', y = b.fechaEntrega || '9999-99-99'
     return x.localeCompare(y) || (a.numero || 0) - (b.numero || 0)
   })
-  return { filas, resumen, avisos, fechaReferencia }
+  return { filas, resumen, avisos, fechaReferencia, porCliente }
 }

@@ -8,14 +8,14 @@ import { reporteCuentasPorCobrar } from '../lib/cuentas-cobrar.js'
 
 const opciones = [
   ['todos', 'Todos los saldos'],
-  ['vencido', 'Vencidos'],
-  ['por_vencer', 'Por vencer'],
+  ['vencido', 'Entrega prevista ya pasó'],
+  ['por_vencer', 'Entrega prevista futura o hoy'],
   ['sin_fecha', 'Sin fecha de entrega'],
 ]
 
 const estado = {
-  vencido: 'Vencido',
-  por_vencer: 'Por vencer',
+  vencido: 'Entrega prevista pasada',
+  por_vencer: 'Entrega prevista pendiente',
   sin_fecha: 'Sin fecha',
 }
 
@@ -24,7 +24,6 @@ export default function CuentasPorCobrar() {
   const [dia, setDia] = useState(hoy())
   const [vista, setVista] = useState('todos')
   const [buscar, setBuscar] = useState('')
-  const [error, setError] = useState('')
   const reporte = useMemo(() => {
     if (!pedidos) return null
     try {
@@ -44,7 +43,7 @@ export default function CuentasPorCobrar() {
       <div className="encabezado">
         <div>
           <h1>Cuentas por cobrar</h1>
-          <p>Consulta saldos actuales por pedido, próximos vencimientos y dinero pendiente de cobro. No se generan cobros ni se modifican pedidos.</p>
+          <p>Consulta saldos actuales por pedido y por cliente. Las fechas son de entrega prevista, no necesariamente vencimientos de pago. No se generan cobros ni se modifican pedidos.</p>
         </div>
         <Link className="boton sec" to="/pedidos">Ver pedidos</Link>
       </div>
@@ -59,22 +58,39 @@ export default function CuentasPorCobrar() {
           </div>
         </div>
         {!reporte && !!pedidos && <p role="alert" className="pendiente">Selecciona una fecha de referencia válida.</p>}
-        {error && <p role="alert" className="pendiente">{error}</p>}
       </div>
 
       {r && <>
         <div className="grid g4">
           <div className="tarjeta kpi"><div className="etiqueta">Pendiente total</div><div className="valor">{usd(r.totalPendiente)}</div></div>
-          <div className="tarjeta kpi"><div className="etiqueta">Vencido</div><div className="valor">{usd(r.vencido)}</div><div className="desglose">{r.cantidadVencida} pedido(s)</div></div>
-          <div className="tarjeta kpi"><div className="etiqueta">Por vencer</div><div className="valor">{usd(r.porVencer)}</div></div>
+          <div className="tarjeta kpi"><div className="etiqueta">Entrega prevista pasada</div><div className="valor">{usd(r.vencido)}</div><div className="desglose">{r.cantidadVencida} pedido(s)</div></div>
+          <div className="tarjeta kpi"><div className="etiqueta">Entrega prevista futura</div><div className="valor">{usd(r.porVencer)}</div></div>
           <div className="tarjeta kpi"><div className="etiqueta">Sin fecha</div><div className="valor">{usd(r.sinFecha)}</div></div>
         </div>
         <div className="tarjeta">
           <p><strong>{r.cantidadPendiente}</strong> pedidos con saldo · <strong>{usd(r.porCobrarEntregado)}</strong> corresponde a pedidos ya entregados.</p>
-          <p className="muted">Los importes se expresan en USD, como están registrados los pedidos. La fecha seleccionada clasifica vencimientos, pero los saldos reflejan el estado actual de los abonos; no reconstruye una cartera histórica.</p>
+          <p className="muted">Los importes están en USD. La fecha seleccionada compara la entrega prevista con el día indicado; no demuestra vencimiento legal de pago. Los abonos son actuales, por lo que este tablero no reconstruye saldos históricos.</p>
           {!!r.excesoAbonos && <p className="pendiente">Se detectaron {usd(r.excesoAbonos)} en abonos superiores al total de algunos pedidos. Revisa esos pagos: no se descuentan de otras deudas.</p>}
           {!!r.casosExcluidos && <div className="avisos"><strong>{r.casosExcluidos} pedido(s) excluido(s) por falta de importes confiables.</strong><ul>{reporte.avisos.map((a, i) => <li key={i}>{a}</li>)}</ul></div>}
           <p className="ayuda">Los pedidos cancelados quedan fuera del cálculo. Cualquier devolución de dinero debe revisarse por separado en el registro original.</p>
+        </div>
+        <div className="tarjeta tabla-scroll">
+          <h2>Saldo pendiente por cliente</h2>
+          <p className="muted">Agrupa por ficha de cliente cuando existe; si no, por nombre escrito en el pedido. Los pedidos anónimos se mantienen separados. No se compensan deudas entre clientes.</p>
+          <table>
+            <thead><tr><th>Cliente</th><th className="num">Pedidos pendientes</th>
+              <th className="num">Saldo total</th><th className="num">Ya entregados</th>
+              <th className="num">Con fecha prevista pasada</th></tr></thead>
+            <tbody>
+              {reporte.porCliente.map(c => <tr key={c.clave}>
+                <td>{c.nombre}</td><td className="num">{c.pedidos}</td>
+                <td className="num"><strong>{usd(c.totalPendiente)}</strong></td>
+                <td className="num">{usd(c.entregadoPendiente)}</td>
+                <td className="num">{usd(c.fueraDeFechaEntrega)}</td>
+              </tr>)}
+              {!reporte.porCliente.length && <tr><td colSpan={5} className="vacio">No hay clientes con saldos pendientes.</td></tr>}
+            </tbody>
+          </table>
         </div>
         <div className="tarjeta tabla-scroll">
           <h2>Detalle de saldos pendientes</h2>
