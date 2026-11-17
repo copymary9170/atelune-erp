@@ -73,6 +73,10 @@ function remotoSupabase(uid) {
     },
     async insertar(datos) {
       const { data, error } = await supabase.from(TABLA).insert({ user_id: uid, datos, version: 1, dispositivo: navigator.userAgent.slice(0, 120) }).select('version').single()
+      // Dos dispositivos pueden detectar la nube vacía al mismo tiempo.
+      // El segundo INSERT viola la clave única: pedir nueva lectura, no dar
+      // por sincronizada una copia que Supabase rechazó.
+      if (error?.code === '23505') return null
       if (error) throw error
       return data.version
     },
