@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 import { aplicarMovimiento, calcularCotizacion, consumoPedido, faltantesDeCosto, personas } from './lib/calc.js'
 import { prepararDuplicadoCotizacion } from './lib/escalas-cotizaciones.js'
+import { calcularArqueo, resumenMovimientosCaja } from './lib/caja.js'
 
 // Base de datos local (IndexedDB, dentro del navegador).
 // Toda la lógica de datos pasa por este archivo para poder migrar
@@ -38,7 +39,11 @@ instancia.version(2).stores({
 instancia.version(3).stores({
   gastos: '++id, fecha, tipo, categoria, proveedorId',
   asientosManuales: '++id, fecha',
-  })
+})
+// Etapa 11: cierres de caja por fecha y método, sin tocar la contabilidad.
+instancia.version(4).stores({
+  cajaArqueos: '++id, fecha, metodo, [fecha+metodo]',
+})
   return instancia
 }
 
@@ -111,7 +116,7 @@ export async function tasaVigente() {
 
 // ---------- Inventario ----------
 
-export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen }) {
+export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen, tasa }) {
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     const p = await db.productos.get(productoId)
     if (!p) throw new Error('Producto no encontrado')
@@ -128,6 +133,7 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
       pedidoId: pedidoId ?? null,
       proveedorId: proveedorId ?? null,
       pagadoCon: pagadoCon ?? null,
+      tasa: tasa == null ? null : Number(tasa),
       origen: origen ?? null,
       stockResultante: r.stock,
       costoPromedioResultante: r.costoPromedio,
@@ -136,7 +142,7 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
 }
 
 // ---------- Respaldo ----------
-const TABLAS = ['config', 'productos', 'movimientos', 'activos', 'tasas', 'plantillas', 'cotizaciones', 'clientes', 'proveedores', 'pedidos', 'gastos', 'asientosManuales']
+const TABLAS = ['config', 'productos', 'movimientos', 'activos', 'tasas', 'plantillas', 'cotizaciones', 'clientes', 'proveedores', 'pedidos', 'gastos', 'asientosManuales', 'cajaArqueos']
 
 export async function exportarDatos({ origen = db } = {}) {
   const datos = { app: 'atelune-erp', version: 1, fecha: new Date().toISOString() }
@@ -153,7 +159,7 @@ export async function exportarRespaldo() {
 }
 
 export async function tieneDatos({ origen = db } = {}) {
-  for (const t of ['productos', 'pedidos', 'cotizaciones', 'activos', 'gastos', 'clientes', 'proveedores', 'movimientos', 'plantillas', 'asientosManuales'])
+  for (const t of ['productos', 'pedidos', 'cotizaciones', 'activos', 'gastos', 'clientes', 'proveedores', 'movimientos', 'plantillas', 'asientosManuales', 'cajaArqueos'])
     if ((await origen[t].count()) > 0) return true
   return false
 }
@@ -286,6 +292,30 @@ export async function duplicarCotizacion(id) {
     const numero = Math.max(0, Number(ultima?.numero) || 0) + 1
     const fecha = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
     return db.cotizaciones.add(prepararDuplicadoCotizacion(origen, numero, fecha))
+  })
+}
+
+// Cierres informativos por método y día: nunca modifican documentos originales.
+export async function guardarArqueoCaja(entrada) {
+  return db.transaction('rw', db.cajaArqueos, db.pedidos, db.gastos, db.movimientos, async () => {
+    const { fecha, metodo } = entrada
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error('Fecha inválida.')
+    const existente = await db.cajaArqueos.where('[fecha+metodo]').equals([fecha, metodo]).first()
+    if (existente) throw new Error('Ya existe un arqueo para esta fecha y método.')
+    const [pedidos, gastos, movimientos] = await Promise.all([
+      db.pedidos.toArray(), db.gastos.toArray(), db.movimientos.toArray(),
+    ])
+    const resumen = resumenMovimientosCaja({ pedidos, gastos, movimientos }, { fecha, metodo })
+    const montos = calcularArqueo({ inicial: entrada.inicial, contado: entrada.contado, resumen })
+    return db.cajaArqueos.add({
+      fecha, metodo, moneda: resumen.moneda,
+      inicial: Number(entrada.inicial), contado: montos.contado,
+      esperado: montos.esperado, diferencia: montos.diferencia,
+      entradas: resumen.entradas, salidas: resumen.salidas,
+      registros: structuredClone(resumen.registros),
+      nota: String(entrada.nota || '').trim().slice(0, 500),
+      cerradoEn: new Date().toISOString(),
+    })
   })
 }
 
@@ -428,12 +458,12 @@ export async function agregarDatos(datos) {
 
 // ---------- Compra de varios materiales ----------
 /** lineas: [{ productoId, cantidadUso, costoTotal }] con el delivery ya incluido en costoTotal. */
-export async function registrarCompra({ lineas, fecha, proveedorId, pagadoCon, referencia, nota }) {
+export async function registrarCompra({ lineas, fecha, proveedorId, pagadoCon, referencia, nota, tasa }) {
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     for (const l of lineas)
       await registrarMovimiento({
         productoId: l.productoId, tipo: 'entrada', cantidad: l.cantidadUso, costoUnitario: l.costoTotal / l.cantidadUso,
-        fecha, proveedorId, pagadoCon, referencia, nota,
+        fecha, proveedorId, pagadoCon, referencia, nota, tasa,
       })
   })
 }

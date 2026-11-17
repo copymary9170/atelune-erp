@@ -132,3 +132,15 @@ Los pedidos cerrados no admiten cambios en tiempos. Antes de publicar: realizar 
 ### Seguridad de datos y migración
 
 Antes de trabajar con una nueva versión, exporta un respaldo desde Configuración. No subas ZIP de etapas antiguas sobre el código actual; trabaja desde `main` y usa ramas de prueba. La sincronización en vivo entre dos cuentas y las políticas RLS de Supabase requieren una verificación independiente de las pruebas automatizadas.
+
+## Etapa 11 (en prueba): caja y arqueo de efectivo
+
+- Nueva pantalla **Finanzas → Caja y arqueo** para registrar cierres por día y método de efectivo: separa **Efectivo $** de **Efectivo Bs**.
+- Detecta entradas desde abonos de pedidos no anulados y aportes de capital; descuenta gastos, pagos a proveedores, retiros, reparto y compras de inventario pagadas con ese método.
+- Los montos originales se almacenan en USD. Si el cobro/pago es en **Efectivo Bs**, el valor para arqueo se obtiene de la **tasa Bs/$ registrada en cada movimiento**. No se aplica automáticamente la tasa de hoy a movimientos pasados.
+- Si faltan tasas o hay montos inválidos, el arqueo queda **incompleto** y no permite registrar el cierre. En compras futuras pagadas en efectivo Bs se solicita la tasa de la operación.
+- El usuario debe introducir explícitamente el **saldo físico inicial** y el **efectivo contado**. El sistema calcula entradas, salidas, saldo esperado y diferencia; deja un historial con los movimientos tal como estaban al cerrar.
+- Hay un único cierre por fecha y método. Un cierre guardado no se cambia automáticamente si después se modifican pagos o gastos. El historial muestra el cierre capturado.
+- El arqueo es un **control auxiliar**, no genera asientos contables, pagos, movimientos de efectivo ni ajustes automáticos. No mezcla bancos, pagos móviles o monedas.
+- Los arqueos se guardan en la tabla IndexedDB `cajaArqueos` (esquema v4) y están incluidos en los respaldos y la sincronización existente. Un respaldo antiguo sin arqueos no puede borrar los cierres que ya estén almacenados.
+- Antes de promover esta etapa a producción, comprobar el funcionamiento en la vista previa con operaciones ficticias, respaldo descargado y sincronización validada. Los movimientos antiguos de compras pagadas en Bs sin tasa se mantienen pendientes, sin inventar importes.
