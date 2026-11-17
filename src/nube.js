@@ -58,6 +58,11 @@ function metaPara(uid) {
   }
 }
 
+export function reiniciarMetaCuenta(uid) {
+  // Una nueva base vacía no puede heredar la versión de una base anterior.
+  localStorage.removeItem('atelune-nube-' + uid)
+}
+
 function remotoSupabase(uid) {
   return {
     async leer() {
@@ -80,10 +85,10 @@ function remotoSupabase(uid) {
   }
 }
 
-let hooksInstalados = false
+const basesConHooks = new WeakSet()
 function instalarHooks() {
-  if (hooksInstalados) return
-  hooksInstalados = true
+  if (basesConHooks.has(db)) return
+  basesConHooks.add(db)
   const avisar = () => {
     if (!sinc || sinc.aplicandoRemoto) return
     sinc.marcarCambio()
