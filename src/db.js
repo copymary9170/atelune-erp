@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 import { aplicarMovimiento, calcularCotizacion, consumoPedido, faltantesDeCosto, personas } from './lib/calc.js'
 import { prepararDuplicadoCotizacion } from './lib/escalas-cotizaciones.js'
+import { calcularArqueo, resumenMovimientosCaja } from './lib/caja.js'
 
 // Base de datos local (IndexedDB, dentro del navegador).
 // Toda la lógica de datos pasa por este archivo para poder migrar
@@ -295,7 +296,6 @@ export async function duplicarCotizacion(id) {
 
 // Cierres informativos por método y día: nunca modifican documentos originales.
 export async function guardarArqueoCaja(entrada) {
-  const { calcularArqueo, resumenMovimientosCaja } = await import('./lib/caja.js')
   return db.transaction('rw', db.cajaArqueos, db.pedidos, db.gastos, db.movimientos, async () => {
     const { fecha, metodo } = entrada
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error('Fecha inválida.')
