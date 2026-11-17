@@ -72,9 +72,11 @@ Aplicación web para administrar Atelune: papelería creativa, impresión, impre
 - Menú con indicador de sección activa; estados en color según su etapa; estados vacíos con el motivo de la marca; avisos con variante suave.
 - Pantalla de acceso adaptada al diseño actual; cotización impresa con membrete, lema editable, bloque de cliente y pie de página.
 
-## Próximas etapas
+## Estado de validación y próximas comprobaciones
 
-Reportes globales de rentabilidad en fase de prueba.
+Las Etapas 1 a 14 tienen implementaciones en el repositorio. Las pruebas automatizadas y la compilación no equivalen a una auditoría de la base Supabase real ni a pruebas visuales de todas las pantallas. Antes de depender de la nube con varias cuentas, ejecutar `supabase/verificar_rls.sql` en el proyecto correcto y completar las comprobaciones de dos usuarios descritas en `AUDITORIA_INTEGRAL_2026-11-17.md`.
+
+El comparador de cantidades (10, 50, 100 y cantidad actual) está disponible en una rama de prueba y conserva los descuentos por escalones de la Etapa 10. No genera precios mínimos garantizados ni altera cotizaciones hasta que se cambie y guarde una cantidad manualmente.
 
 ## Dónde se guardan los datos
 
@@ -110,7 +112,7 @@ Se registra por renglón/etapa la persona responsable, minutos, una tarifa horar
 Los datos se almacenan en `pedido.tiemposProduccion`, separado de `pedido.produccionEtapas`.
 El costo mostrado es únicamente la suma de sesiones **con tarifa registrada**; si hay sesiones sin tarifa se marca «costo incompleto».
 No se transfieren automáticamente importes a los precios de venta, reparto, nómina, caja ni contabilidad, ni se modifican inventarios.
-Los pedidos cerrados no admiten cambios en tiempos. Antes de publicar: realizar copia de seguridad y comprobar compilación (`npm ci && npm run build`), que no se pudo completar en el entorno offline.
+Los pedidos cerrados no admiten cambios en tiempos. Antes de cambios de versión o restauraciones, realizar una copia de seguridad; las pruebas de compilación del repositorio se verifican por separado de la seguridad real de Supabase.
 
 ## Etapa 9: rediseño «Taller creativo» y seguimiento operativo
 
@@ -172,3 +174,9 @@ Antes de trabajar con una nueva versión, exporta un respaldo desde Configuraci�
 - Los saldos de la agrupación corresponden a los pedidos con total y abonos válidos. Los abonos anulados y los pedidos cancelados no se contabilizan y los sobrepagos no se compensan contra otros pedidos.
 - Se corrige la terminología: **fecha prevista de entrega ≠ fecha de vencimiento de pago**. Se muestra expresamente «entrega prevista pasada» en vez de afirmar que una deuda está legalmente vencida.
 - Es un informe de solo lectura; no envía mensajes, no crea intereses ni modifica la base o los pedidos.
+
+## Comparador de cantidades de la Etapa 10 (rama de revisión)
+
+En una cotización, abre un trabajo y consulta **Comparador de cantidades**. Muestra 10, 50 y 100 unidades y, si es diferente, la cantidad actual. Cada escenario usa el mismo motor `calcularCotizacion` y conserva los demás trabajos y condiciones de pago. Incluye **costo total, costo unitario, precio unitario, precio total, utilidad y margen**, junto con las alertas de costos incompletos, pérdidas y descuentos aplicados. Materiales, merma, máquinas, producción, diseño (una vez), extras y prorrateo de costos fijos se calculan de nuevo para cada escenario.
+
+El comparador **no guarda datos** ni modifica descuentos. El precio mostrado es un escenario de venta basado en los márgenes y descuentos configurados: **no es una recomendación automática de precio mínimo**. Delivery, comisiones e IVA se excluyen de la tabla por trabajo, aunque el motor los calcula para el total de cotización completa.
