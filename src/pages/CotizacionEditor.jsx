@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, tasaVigente, crearPedidoDesdeCotizacion, codigoPedido } from '../db.js'
+import { db, tasaVigente, crearPedidoDesdeCotizacion, codigoPedido, duplicarCotizacion } from '../db.js'
+import { escalasInvalidas } from '../lib/escalas-cotizaciones.js'
 import { Avisos, Campo, Selector } from '../components/ui.jsx'
 import ItemEditor, { itemVacio } from '../components/ItemEditor.jsx'
 import { useDatosCalculo } from './Plantillas.jsx'
@@ -35,6 +36,7 @@ export default function CotizacionEditor() {
   const r = useMemo(() => (c ? calcularCotizacion(c, datos) : null), [c, datos])
   const avisos = useMemo(() => (c ? avisosCotizacion(c, datos) : []), [c, datos])
   const faltantes = useMemo(() => (c ? faltantesDeCosto(c, datos) : []), [c, datos])
+  const escalasConError = c?.items?.some(it => escalasInvalidas(it.escalasCantidad || [])) ?? false
 
   if (guardada === undefined && !c) return <p className="muted">Cargando…</p>
   if (!c) return <p>No se encontró la cotización.</p>
@@ -52,14 +54,27 @@ export default function CotizacionEditor() {
   }
 
   async function guardar(siguiente) {
+    if (escalasConError) { setAviso('Corrige los escalones por cantidad antes de guardar.'); return }
     await db.cotizaciones.put({ ...c, calculo: resumenCalculo(r) })
     setAviso('Guardada ✓')
     setTimeout(() => setAviso(''), 2000)
     if (siguiente) navigate(siguiente)
   }
 
+  async function duplicar() {
+    if (!confirm('¿Crear una nueva cotización borrador con estos datos? Se duplicará la última versión GUARDADA. Los cambios sin guardar no se copiarán.')) return
+    try {
+      const nuevaId = await duplicarCotizacion(c.id)
+      navigate('/cotizaciones/' + nuevaId)
+      setC(null)
+    } catch (error) {
+      setAviso(error?.message || 'No se pudo duplicar.')
+    }
+  }
+
   async function convertirEnPedido() {
     if (!c.items.length) return
+    if (escalasConError) { setAviso('Corrige los escalones por cantidad antes de crear el pedido.'); return }
     await db.cotizaciones.put({ ...c, calculo: resumenCalculo(r) })
     const aviso = faltantes.length
       ? `ATENCIÓN: el costo está INCOMPLETO (${faltantes.join('; ')}). El pedido quedará marcado como «costo incompleto» y su utilidad será provisional hasta completar esos datos.\n\n`
@@ -101,11 +116,12 @@ export default function CotizacionEditor() {
         <div className="acciones">
           {aviso && <span className="etiqueta-tipo ok">{aviso}</span>}
           <button className="sec" onClick={() => navigate('/cotizaciones')}>Volver</button>
-          <button className="sec" onClick={() => guardar(`/cotizaciones/${c.id}/imprimir`)} disabled={!c.items.length}>Ver / imprimir PDF</button>
-          <button onClick={() => guardar()}>Guardar</button>
+          <button className="sec" onClick={duplicar}>Duplicar</button>
+          <button className="sec" onClick={() => guardar(`/cotizaciones/${c.id}/imprimir`)} disabled={!c.items.length || escalasConError}>Ver / imprimir PDF</button>
+          <button onClick={() => guardar()} disabled={escalasConError}>Guardar</button>
           {pedido
             ? <button className="sec" onClick={() => navigate('/pedidos/' + pedido.id)}>Ver {codigoPedido(pedido.numero)}</button>
-            : <button onClick={convertirEnPedido} disabled={!c.items.length}>Convertir en pedido</button>}
+            : <button onClick={convertirEnPedido} disabled={!c.items.length || escalasConError}>Convertir en pedido</button>}
         </div>
       </div>
 
@@ -126,6 +142,7 @@ export default function CotizacionEditor() {
         )}
       </div>
 
+      {escalasConError && <p className="pendiente" role="alert">Corrige los descuentos por cantidad. No se podrá guardar ni convertir el pedido hasta que los escalones sean válidos.</p>}
       <Avisos lista={avisos} titulo="Para que el precio sea exacto, completa:" />
 
       {c.items.map((it, i) => {
@@ -136,7 +153,8 @@ export default function CotizacionEditor() {
               <div style={{ cursor: 'pointer', flex: 1 }} onClick={() => setAbierto(abierto === i ? -1 : i)}>
                 <h3 style={{ marginBottom: 2 }}>{abierto === i ? '▾' : '▸'} {it.descripcion || `Trabajo ${i + 1}`}</h3>
                 <span className="desglose">
-                  {num(it.cantidad)} × {usd(rr.precioUnitario)} = <strong>{usd(rr.precio)}</strong> · costo {usd(rr.costo)} · margen {num(rr.margenPct, 1)} %
+                  {num(it.cantidad)} × {usd(rr.precioUnitario)} = <strong>{usd(rr.precio)}</strong> · costo {usd(rr.costo)} · margen base {num(rr.margenPct, 1)} %
+                  {rr.descuentoCantidadPct > 0 && <span> · descuento cantidad {num(rr.descuentoCantidadPct)} %</span>}
                 </span>
               </div>
               <button className="peligro mini" onClick={() => { if (confirm('¿Quitar este trabajo?')) set('items', c.items.filter((_, j) => j !== i)) }}>Quitar</button>
@@ -153,7 +171,8 @@ export default function CotizacionEditor() {
                     <tr><td>Parte de costos fijos</td><td className="num">{usd(rr.fijos)}</td></tr>
                     <tr><td><strong>Costo total</strong></td><td className="num"><strong>{usd(rr.costo)}</strong></td></tr>
                     <tr><td>Precio con margen</td><td className="num">{usd(rr.precioLista)}</td></tr>
-                    {rr.descuento > 0 && <tr><td>Descuento</td><td className="num">−{usd(rr.descuento)}</td></tr>}
+                    {rr.descuentoCantidadPct > 0 && <tr><td>Descuento por cantidad (desde {rr.umbralCantidad})</td><td className="num">{num(rr.descuentoCantidadPct)} %</td></tr>}
+                    {rr.descuento > 0 && <tr><td>Descuentos aplicados</td><td className="num">−{usd(rr.descuento)}</td></tr>}
                   </tbody>
                 </table>
               </>
