@@ -26,7 +26,7 @@ function crearBase(nombre) {
 })
 
 // Etapa 2: clientes, proveedores y pedidos.
-db.version(2).stores({
+instancia.version(2).stores({
   clientes: '++id, nombre',
   proveedores: '++id, nombre',
   pedidos: '++id, numero, fecha, estado, clienteId, cotizacionId',
@@ -34,7 +34,7 @@ db.version(2).stores({
 })
 
 // Etapa 3: gastos y contabilidad.
-db.version(3).stores({
+instancia.version(3).stores({
   gastos: '++id, fecha, tipo, categoria, proveedorId',
   asientosManuales: '++id, fecha',
   })
