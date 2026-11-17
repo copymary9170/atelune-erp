@@ -2,7 +2,8 @@
 // solo en este navegador, como en las etapas anteriores.
 import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
-import { db, exportarDatos, importarRespaldo, validarRespaldo, tieneDatos, TABLAS } from './db.js'
+import { db, exportarDatos, importarRespaldo, tieneDatos, TABLAS } from './db.js'
+import { validarRespuestaRemota } from './lib/validacion-nube.js'
 import { crearSincronizador } from './lib/sincronizador.js'
 
 // Vercel + Supabase crea estas variables. Solo se leen la URL y la clave pública (anon):
@@ -68,11 +69,7 @@ function remotoSupabase(uid) {
     async leer() {
       const { data, error } = await supabase.from(TABLA).select('datos, version').eq('user_id', uid).maybeSingle()
       if (error) throw error
-      if (data) {
-        if (!Number.isSafeInteger(data.version) || data.version < 1) throw new Error('Versión de copia remota inválida.')
-        validarRespaldo(data.datos)
-      }
-      return data
+      return validarRespuestaRemota(data)
     },
     async insertar(datos) {
       const { data, error } = await supabase.from(TABLA).insert({ user_id: uid, datos, version: 1, dispositivo: navigator.userAgent.slice(0, 120) }).select('version').single()
