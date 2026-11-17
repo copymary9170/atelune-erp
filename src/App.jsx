@@ -4,6 +4,7 @@ import { Acceso, IndicadorNube, ConflictoNube } from './components/Nube.jsx'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { Logo, Marca } from './components/ui.jsx'
 import Inicio from './pages/Inicio.jsx'
+import Agenda from './pages/Agenda.jsx'
 import Inventario from './pages/Inventario.jsx'
 import Activos from './pages/Activos.jsx'
 import Cotizaciones from './pages/Cotizaciones.jsx'
@@ -22,6 +23,7 @@ const MENU = [
   { to: '/', icono: 'M3 11l9-8 9 8M5 10v10h14V10', label: 'Inicio', end: true },
   { seccion: 'Ventas' },
   { to: '/cotizaciones', icono: 'M6 2h9l5 5v15H6zM14 2v6h6M9 13h6M9 17h6', label: 'Cotizaciones' },
+  { to: '/agenda', icono: 'M8 2v4M16 2v4M3 10h18M4 5h16v16H4zM8 15l3 3 5-5', label: 'Agenda del taller' },
   { to: '/pedidos', icono: 'M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10', label: 'Pedidos y producción' },
   { to: '/clientes', icono: 'M16 20v-2a4 4 0 0 0-8 0v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8', label: 'Clientes' },
   { to: '/plantillas', icono: 'M4 4h16v5H4zM4 13h7v7H4zM15 13h5v7h-5z', label: 'Plantillas de trabajo' },
@@ -37,6 +39,8 @@ const MENU = [
   { to: '/tasas', icono: 'M4 8h14l-3-3M20 16H6l3 3', label: 'Tasa de cambio' },
   { to: '/configuracion', icono: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2', label: 'Configuración y respaldo' },
 ]
+
+const TABBAR = ['/', '/cotizaciones', '/pedidos', '/inventario']
 
 const PROXIMAMENTE = ['Reportes de rentabilidad']
 
@@ -89,6 +93,18 @@ function Interfaz() {
         <div className="espaciador" />
         {nubeConfigurada && <IndicadorNube />}
       </nav>
+      <nav className="tabbar" aria-label="Acceso rápido">
+        {MENU.filter((m) => TABBAR.includes(m.to)).map((m) => (
+          <NavLink key={m.to} to={m.to} end={m.end}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={m.icono} /></svg>
+            {m.label.split(' ')[0]}
+          </NavLink>
+        ))}
+        <button onClick={() => setAbierto(true)} aria-label="Abrir menú completo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          Más
+        </button>
+      </nav>
       <ConflictoNube />
       <main className="contenido">
         <Routes>
@@ -99,6 +115,7 @@ function Interfaz() {
           <Route path="/cotizaciones/:id" element={<CotizacionEditor />} />
           <Route path="/plantillas" element={<Plantillas />} />
           <Route path="/pedidos" element={<Pedidos />} />
+          <Route path="/agenda" element={<Agenda />} />
           <Route path="/pedidos/:id" element={<PedidoDetalle />} />
           <Route path="/clientes" element={<Contactos tipo="clientes" key="clientes" />} />
           <Route path="/proveedores" element={<Contactos tipo="proveedores" key="proveedores" />} />

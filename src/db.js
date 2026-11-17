@@ -95,7 +95,7 @@ export async function tasaVigente() {
 
 // ---------- Inventario ----------
 
-export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon }) {
+export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen }) {
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     const p = await db.productos.get(productoId)
     if (!p) throw new Error('Producto no encontrado')
@@ -112,6 +112,7 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
       pedidoId: pedidoId ?? null,
       proveedorId: proveedorId ?? null,
       pagadoCon: pagadoCon ?? null,
+      origen: origen ?? null,
       stockResultante: r.stock,
       costoPromedioResultante: r.costoPromedio,
     })
@@ -143,8 +144,17 @@ export async function tieneDatos() {
 
 export { TABLAS }
 
+// Validación previa a la restauración; compatible con tablas ausentes en respaldos antiguos.
+export function validarRespaldo(datos) {
+  if (!datos || datos.app !== 'atelune-erp' || datos.version !== 1) throw new Error('Respaldo incompatible.')
+  if (!Array.isArray(datos.config) || !datos.config.some(c => c?.id === 'general')) throw new Error('Falta configuración general.')
+  for (const t of TABLAS) if (Object.hasOwn(datos,t) &&
+    (!Array.isArray(datos[t]) || datos[t].length > 100000 || datos[t].some(x => !x || typeof x !== 'object' || Array.isArray(x))))
+    throw new Error('Tabla inválida: ' + t)
+  return true
+}
 export async function importarRespaldo(datos) {
-  if (datos?.app !== 'atelune-erp') throw new Error('El archivo no es un respaldo de Atelune.')
+  validarRespaldo(datos)
   await db.transaction('rw', TABLAS.map((t) => db[t]), async () => {
     for (const t of TABLAS) {
       await db[t].clear()
@@ -228,16 +238,16 @@ export async function cambiarEstadoPedido(id, estado) {
     if (ESTADOS_CON_CONSUMO.includes(estado) && !descontado) {
       for (const c of consumoPedido(p.items, config)) {
         if (await db.productos.get(c.productoId))
-          await registrarMovimiento({ productoId: c.productoId, tipo: 'salida', cantidad: c.cantidad, referencia: ref, nota: 'Consumo de producción', pedidoId: id })
+          await registrarMovimiento({ productoId: c.productoId, tipo: 'salida', cantidad: c.cantidad, referencia: ref, nota: 'Consumo de producción', pedidoId: id, origen: 'consumo_produccion' })
       }
       descontado = true
     }
     if (estado === 'cancelado' && descontado) {
       // Devuelve al inventario lo descontado, al costo con el que salió.
-      const salidas = await db.movimientos.where('pedidoId').equals(id).filter((m) => m.tipo === 'salida' && !m.devuelto).toArray()
+      const salidas = await db.movimientos.where('pedidoId').equals(id).filter((m) => m.tipo === 'salida' && !m.devuelto && (m.origen === 'consumo_produccion' || (!m.origen && m.nota === 'Consumo de producción' && m.referencia === ref))).toArray()
       for (const m of salidas) {
         if (await db.productos.get(m.productoId))
-          await registrarMovimiento({ productoId: m.productoId, tipo: 'entrada', cantidad: m.cantidad, costoUnitario: m.costoUnitario, referencia: ref, nota: 'Devolución por cancelación', pedidoId: id })
+          await registrarMovimiento({ productoId: m.productoId, tipo: 'entrada', cantidad: m.cantidad, costoUnitario: m.costoUnitario, referencia: ref, nota: 'Devolución por cancelación', pedidoId: id, origen: 'reversion_consumo' })
         await db.movimientos.update(m.id, { devuelto: true })
       }
       descontado = false
