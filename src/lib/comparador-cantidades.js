@@ -25,9 +25,12 @@ export function compararCantidadesCotizacion(cotizacion, indice, datos, cantidad
     }
     const resultado = calcularCotizacion(escenario, datos)
     const renglon = resultado.renglones[indice]
+    if (![renglon.costo, renglon.precio, resultado.total].every(Number.isFinite))
+      throw new Error('El margen o alguno de los costos produce un precio inválido; revisa la cotización.')
     const avisos = [
       ...faltantesDeCosto(escenario, datos),
-      ...avisosCotizacion(escenario, datos),
+      // Una tasa Bs/$ ausente afecta el total en bolívares, no el precio USD.
+      ...avisosCotizacion(escenario, datos).filter(a => !a.includes('tasa de cambio')),
     ]
     const costoUnitario = renglon.costo / cantidad
     const precioUnitario = renglon.precio / cantidad
