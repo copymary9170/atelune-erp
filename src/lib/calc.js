@@ -13,15 +13,17 @@ export function aplicarMovimiento(producto, { tipo, cantidad, costoUnitario }) {
   const stock = n(producto.stock)
   const costo = n(producto.costoPromedio)
   const cant = n(cantidad)
-  if (cant <= 0 && tipo !== 'ajuste') throw new Error('La cantidad debe ser mayor que cero.')
+  if (!Number.isFinite(Number(cantidad)) || cant < 0 || (cant === 0 && tipo !== 'ajuste')) throw new Error('Cantidad inválida.')
 
   if (tipo === 'entrada') {
+    if (costoUnitario == null || !Number.isFinite(Number(costoUnitario)) || Number(costoUnitario) < 0) throw new Error('Costo unitario inválido.')
     const cu = n(costoUnitario)
     const nuevoStock = stock + cant
     const nuevoCosto = stock > 0 && nuevoStock > 0 ? (stock * costo + cant * cu) / nuevoStock : cu
     return { stock: nuevoStock, costoPromedio: nuevoCosto }
   }
   if (tipo === 'salida' || tipo === 'merma') {
+    if (cant > stock + 1e-9) throw new Error('Stock insuficiente.')
     return { stock: stock - cant, costoPromedio: costo }
   }
   if (tipo === 'ajuste') {
@@ -234,7 +236,7 @@ export function consumoPedido(items, config) {
   return [...mapa].map(([productoId, cantidad]) => ({ productoId, cantidad })).filter((x) => x.cantidad > 0)
 }
 
-export const totalAbonos = (pedido) => (pedido.abonos || []).reduce((s, a) => s + n(a.monto), 0)
+export const totalAbonos = (pedido) => (pedido.abonos || []).filter(a => !a.anulado).reduce((s, a) => s + n(a.monto), 0)
 export const saldoPedido = (pedido) => n(pedido.total) - totalAbonos(pedido)
 
 // ---------- Costo incompleto ----------
