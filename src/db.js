@@ -196,6 +196,16 @@ async function prepararBaseCuentaInterna(uid, confirmarLegado) {
       const migrar = conDatos && (propietario === uid || (!propietario && confirmarLegado))
       // Conservar propietario histórico de otra cuenta: no transferir datos ajenos.
       if (migrar && !propietario) vincularPropietarioLocal(uid)
+      // Al crear una base vacía, descartar versiones de sincronización heredadas.
+      // Si se migra el legado, marcarlo como pendiente para reconciliarlo con
+      // Supabase antes de considerar que la nueva copia está sincronizada.
+      const claveSync = 'atelune-nube-' + uid
+      if (migrar) {
+        const meta = JSON.parse(localStorage.getItem(claveSync) || '{}')
+        localStorage.setItem(claveSync, JSON.stringify({ ...meta, sucio: true }))
+      } else {
+        localStorage.removeItem(claveSync)
+      }
       const destino = crearBase(nombre)
       try {
         if (migrar) {
