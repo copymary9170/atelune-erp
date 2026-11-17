@@ -3,6 +3,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 import { db, exportarDatos, importarRespaldo, tieneDatos, TABLAS } from './db.js'
+import { validarRespuestaRemota } from './lib/validacion-nube.js'
 import { crearSincronizador } from './lib/sincronizador.js'
 
 // Vercel + Supabase crea estas variables. Solo se leen la URL y la clave pública (anon):
@@ -58,12 +59,17 @@ function metaPara(uid) {
   }
 }
 
+export function reiniciarMetaCuenta(uid) {
+  // Una nueva base vacía no puede heredar la versión de una base anterior.
+  localStorage.removeItem('atelune-nube-' + uid)
+}
+
 function remotoSupabase(uid) {
   return {
     async leer() {
       const { data, error } = await supabase.from(TABLA).select('datos, version').eq('user_id', uid).maybeSingle()
       if (error) throw error
-      return data
+      return validarRespuestaRemota(data)
     },
     async insertar(datos) {
       const { data, error } = await supabase.from(TABLA).insert({ user_id: uid, datos, version: 1, dispositivo: navigator.userAgent.slice(0, 120) }).select('version').single()
@@ -80,10 +86,10 @@ function remotoSupabase(uid) {
   }
 }
 
-let hooksInstalados = false
+const basesConHooks = new WeakSet()
 function instalarHooks() {
-  if (hooksInstalados) return
-  hooksInstalados = true
+  if (basesConHooks.has(db)) return
+  basesConHooks.add(db)
   const avisar = () => {
     if (!sinc || sinc.aplicandoRemoto) return
     sinc.marcarCambio()
@@ -102,13 +108,15 @@ export function iniciarNube(uid) {
   if (sinc?.uid === uid) return sinc.sincronizar()
   sinc?.detener()
   instalarHooks()
+  // Fijar la base por instancia: una respuesta tardía de la cuenta A nunca
+  // debe escribir sobre la base actualmente seleccionada para la cuenta B.
+  const baseDeSesion = db
   sinc = crearSincronizador({
     remoto: remotoSupabase(uid),
     local: {
-      exportar: exportarDatos,
-      // La configuración de este dispositivo no se pisa con el respaldo local; se trae la de la nube.
-      importar: (datos) => importarRespaldo({ ...datos, app: 'atelune-erp' }),
-      tieneDatos,
+      exportar: () => exportarDatos({ origen: baseDeSesion }),
+      importar: (datos) => importarRespaldo(datos, { destino: baseDeSesion }),
+      tieneDatos: () => tieneDatos({ origen: baseDeSesion }),
     },
     meta: metaPara(uid),
     alEstado: setEstado,

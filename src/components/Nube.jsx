@@ -59,7 +59,14 @@ export function ConflictoNube() {
   async function elegir(e) {
     if (e === 'local' && !confirm('Se reemplazará lo que hay en la nube por lo de este dispositivo. ¿Continuar?')) return
     if (e === 'nube' && !confirm('Se reemplazará lo de este dispositivo por lo que hay en la nube. ¿Continuar?')) return
-    setOcupado(true); await resolverConflicto(e); setOcupado(false)
+    setOcupado(true)
+    try {
+      await resolverConflicto(e)
+    } catch (error) {
+      alert('No se pudo resolver el conflicto: ' + (error?.message || 'Error desconocido') + '. Los datos locales se conservan.')
+    } finally {
+      setOcupado(false)
+    }
   }
   return (
     <Modal titulo="¿Qué datos conservo?" onCerrar={() => {}}>

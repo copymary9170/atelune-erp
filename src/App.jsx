@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
-import { nubeConfigurada, useSesion, iniciarNube, detenerNube, supabase } from './nube.js'
-import { tieneDatos } from './db.js'
-import { CLAVE_PROPIETARIO, decidirAccesoLocal, leerPropietarioLocal, vincularPropietarioLocal } from './lib/cuenta-local.js'
+import { useEffect, useRef, useState } from 'react'
+import { nubeConfigurada, useSesion, iniciarNube, detenerNube, supabase, reiniciarMetaCuenta } from './nube.js'
+import { prepararBaseCuenta } from './db.js'
 import { Acceso, IndicadorNube, ConflictoNube } from './components/Nube.jsx'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { Logo, Marca } from './components/ui.jsx'
@@ -49,79 +48,74 @@ const PROXIMAMENTE = ['Reportes de rentabilidad']
 export default function App() {
   const sesion = useSesion()
   const uid = sesion?.user?.id
-  const [cuentaLocal, setCuentaLocal] = useState({ uid: null, fase: 'comprobando' })
+  const uidActual = useRef(uid)
+  uidActual.current = uid
+  const [cuentaLocal, setCuentaLocal] = useState({ uid: null, fase: 'comprobando', detalle: '' })
 
   useEffect(() => {
-    // Antes de autorizar una nueva sesión detenemos todo sincronizador anterior.
     detenerNube()
     let vigente = true
-    setCuentaLocal({ uid, fase: 'comprobando' })
+    setCuentaLocal({ uid, fase: 'comprobando', detalle: '' })
     if (!nubeConfigurada || !uid) return () => { vigente = false; detenerNube() }
 
     async function comprobar() {
       try {
-        const propietario = leerPropietarioLocal()
-        const hayDatos = propietario ? false : await tieneDatos()
+        const resultado = await prepararBaseCuenta(uid)
         if (!vigente) return
-        const decision = decidirAccesoLocal(uid, propietario, hayDatos)
-        if (decision === 'vincular') vincularPropietarioLocal(uid)
-        if (!vigente) return
-        const fase = decision === 'vincular' ? 'permitida' : decision
-        setCuentaLocal({ uid, fase })
-        if (fase === 'permitida') iniciarNube(uid)
-      } catch {
-        if (vigente) setCuentaLocal({ uid, fase: 'bloqueada' })
+        if (resultado.estado === 'confirmar') {
+          setCuentaLocal({ uid, fase: 'confirmar', detalle: '' })
+          return
+        }
+        if (resultado.nueva && !resultado.migrada) reiniciarMetaCuenta(uid)
+        setCuentaLocal({ uid, fase: 'permitida', detalle: '' })
+        iniciarNube(uid)
+      } catch (error) {
+        if (vigente) setCuentaLocal({ uid, fase: 'bloqueada', detalle: error.message })
       }
     }
-
-    const cambioDePropietario = (evento) => {
-      if (evento.key !== CLAVE_PROPIETARIO && evento.key !== null) return
-      try {
-        if (leerPropietarioLocal() === uid) return
-      } catch { /* sin acceso al almacenamiento: bloquear */ }
-      detenerNube()
-      if (vigente) setCuentaLocal({ uid, fase: 'bloqueada' })
-    }
-    window.addEventListener('storage', cambioDePropietario)
     comprobar()
-    return () => {
-      vigente = false
-      window.removeEventListener('storage', cambioDePropietario)
-      detenerNube()
-    }
+    return () => { vigente = false; detenerNube() }
   }, [uid])
 
   async function confirmarPropiedad() {
+    const uidConfirmada = uid
+    setCuentaLocal({ uid, fase: 'comprobando', detalle: '' })
     try {
-      // Solo una decisión explícita vincula datos heredados a la cuenta.
-      vincularPropietarioLocal(uid)
-      setCuentaLocal({ uid, fase: 'permitida' })
-      iniciarNube(uid)
-    } catch {
-      setCuentaLocal({ uid, fase: 'bloqueada' })
+      // El consentimiento sólo se aplica a la base antigua, que no se borra.
+      const resultado = await prepararBaseCuenta(uidConfirmada, { confirmarLegado: true })
+      // La cuenta pudo cambiar mientras se copiaban los datos: no arrancar la
+      // sincronización de la sesión anterior ni mostrar su base en otra sesión.
+      if (uidActual.current !== uidConfirmada) return
+      if (resultado.estado !== 'lista') throw new Error('No se pudo completar la migración de datos.')
+      if (resultado.nueva && !resultado.migrada) reiniciarMetaCuenta(uidConfirmada)
+      setCuentaLocal({ uid: uidConfirmada, fase: 'permitida', detalle: '' })
+      iniciarNube(uidConfirmada)
+    } catch (error) {
+      if (uidActual.current === uidConfirmada) setCuentaLocal({ uid: uidConfirmada, fase: 'bloqueada', detalle: error.message })
     }
   }
 
   if (nubeConfigurada && sesion === undefined) return <p className="muted" style={{ padding: 30 }}>Cargando…</p>
   if (nubeConfigurada && !sesion) return <Acceso />
   if (nubeConfigurada && (cuentaLocal.uid !== uid || cuentaLocal.fase === 'comprobando'))
-    return <p className="muted" style={{ padding: 30 }}>Comprobando protección de los datos locales…</p>
+    return <p className="muted" style={{ padding: 30 }}>Preparando la base independiente de esta cuenta…</p>
   if (nubeConfigurada && cuentaLocal.fase !== 'permitida') return (
     <div className="acceso">
       <div className="tarjeta" style={{ maxWidth: 520 }}>
         <Marca size={38} />
-        <h2>{cuentaLocal.fase === 'confirmar' ? '¿Son tuyos los datos de este navegador?' : 'Este navegador pertenece a otra cuenta'}</h2>
+        <h2>{cuentaLocal.fase === 'confirmar' ? '¿Te pertenecen los datos antiguos de este navegador?' : 'No se pudo acceder a tus datos locales'}</h2>
         <p>{cuentaLocal.fase === 'confirmar'
-          ? 'Hay información local anterior sin una cuenta vinculada. Confirma únicamente si esos datos son tuyos y corresponden a la cuenta con la que acabas de entrar. No se ha sincronizado nada.'
-          : 'Los datos locales están vinculados a otra cuenta o no puede verificarse su propietario. Para protegerlos, se ha bloqueado el acceso y la sincronización. Usa un perfil de navegador diferente o vuelve a la cuenta original.'}</p>
+          ? 'Se encontraron datos de la versión anterior, todavía sin una cuenta propietaria identificada. Confirma solo si son tuyos: se COPIARÁN a una base exclusiva de tu cuenta. Los originales se conservarán.'
+          : 'Para evitar una pérdida o mezcla de información no se abrió el ERP. No borres los datos del navegador ni restauraciones existentes.'}</p>
+        {cuentaLocal.detalle && <p className="pendiente">{cuentaLocal.detalle}</p>}
         <div className="acciones">
-          {cuentaLocal.fase === 'confirmar' && <button onClick={confirmarPropiedad}>Sí, estos datos pertenecen a mi cuenta</button>}
+          {cuentaLocal.fase === 'confirmar' && <button onClick={confirmarPropiedad}>Sí, copiar a mi cuenta</button>}
           <button className="sec" onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
         </div>
       </div>
     </div>
   )
-  return <Interfaz />
+  return <Interfaz key={uid || 'local'} />
 }
 
 function Interfaz() {

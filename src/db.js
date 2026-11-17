@@ -4,9 +4,18 @@ import { aplicarMovimiento, calcularCotizacion, consumoPedido, faltantesDeCosto,
 // Base de datos local (IndexedDB, dentro del navegador).
 // Toda la lógica de datos pasa por este archivo para poder migrar
 // a una base en la nube (p. ej. Supabase) más adelante sin reescribir pantallas.
-export const db = new Dexie('atelune-erp')
+export const NOMBRE_BASE_LEGADA = 'atelune-erp'
 
-db.version(1).stores({
+// Una base independiente por usuario autenticado; los nombres antiguos nunca se borran.
+// El UID proviene exclusivamente de la sesión verificada por Supabase.
+export function nombreBaseCuenta(uid) {
+  if (typeof uid !== 'string' || !/^[a-f0-9-]{36}$/i.test(uid)) throw new Error('Identificador de cuenta inválido.')
+  return 'atelune-erp-cuenta-' + uid.toLowerCase()
+}
+
+function crearBase(nombre) {
+  const instancia = new Dexie(nombre)
+  instancia.version(1).stores({
   config: 'id',
   productos: '++id, codigo, nombre, tipo, lineaId',
   movimientos: '++id, productoId, fecha, tipo',
@@ -17,7 +26,7 @@ db.version(1).stores({
 })
 
 // Etapa 2: clientes, proveedores y pedidos.
-db.version(2).stores({
+instancia.version(2).stores({
   clientes: '++id, nombre',
   proveedores: '++id, nombre',
   pedidos: '++id, numero, fecha, estado, clienteId, cotizacionId',
@@ -25,10 +34,16 @@ db.version(2).stores({
 })
 
 // Etapa 3: gastos y contabilidad.
-db.version(3).stores({
+instancia.version(3).stores({
   gastos: '++id, fecha, tipo, categoria, proveedorId',
   asientosManuales: '++id, fecha',
-})
+  })
+  return instancia
+}
+
+// El binding ES mutable: cada consulta usa la base asignada a la sesión actual.
+// La interfaz siempre se desmonta antes de cambiarla.
+export let db = crearBase(NOMBRE_BASE_LEGADA)
 
 export const TIPOS_PRODUCTO = {
   reventa: 'Producto de reventa',
@@ -122,10 +137,10 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
 // ---------- Respaldo ----------
 const TABLAS = ['config', 'productos', 'movimientos', 'activos', 'tasas', 'plantillas', 'cotizaciones', 'clientes', 'proveedores', 'pedidos', 'gastos', 'asientosManuales']
 
-export async function exportarDatos() {
+export async function exportarDatos({ origen = db } = {}) {
   const datos = { app: 'atelune-erp', version: 1, fecha: new Date().toISOString() }
-  await db.transaction('r', TABLAS.map((t) => db[t]), async () => {
-    for (const t of TABLAS) datos[t] = await db[t].toArray()
+  await origen.transaction('r', TABLAS.map((t) => origen[t]), async () => {
+    for (const t of TABLAS) datos[t] = await origen[t].toArray()
   })
   return datos
 }
@@ -136,13 +151,107 @@ export async function exportarRespaldo() {
   return datos
 }
 
-export async function tieneDatos() {
+export async function tieneDatos({ origen = db } = {}) {
   for (const t of ['productos', 'pedidos', 'cotizaciones', 'activos', 'gastos', 'clientes', 'proveedores', 'movimientos', 'plantillas', 'asientosManuales'])
-    if ((await db[t].count()) > 0) return true
+    if ((await origen[t].count()) > 0) return true
   return false
 }
 
 export { TABLAS }
+
+// Una instalación antigua guarda todos los datos en la base compartida. Solo la
+// cuenta propietaria puede migrarla. La copia se hace en una transacción atómica,
+// sin borrar ni modificar la base antigua. Así puede recuperarse manualmente.
+let cambioBasePendiente = Promise.resolve()
+
+export function prepararBaseCuenta(uid, { confirmarLegado = false } = {}) {
+  const trabajo = cambioBasePendiente.then(() => prepararBaseCuentaInterna(uid, confirmarLegado))
+  cambioBasePendiente = trabajo.catch(() => {})
+  return trabajo
+}
+
+async function prepararBaseCuentaInterna(uid, confirmarLegado) {
+  const nombre = nombreBaseCuenta(uid)
+  if (db.name === nombre) return { estado: 'lista', migrada: false, nueva: false }
+
+  const { leerPropietarioLocal, vincularPropietarioLocal } = await import('./lib/cuenta-local.js')
+  const propietario = leerPropietarioLocal() // un error de almacenamiento detiene el acceso
+
+  // Si existe la base individual, nunca se vuelve a migrar desde la base antigua.
+  // Esto preserva todos los cambios hechos después de la primera apertura.
+  let yaExiste = await Dexie.exists(nombre)
+  if (yaExiste) {
+    // Si una pestaña se cerró durante una migración, la base pudo quedar creada
+    // pero sin registros. En ese caso es seguro reintentar la copia del legado.
+    const inspeccion = crearBase(nombre)
+    try {
+      const vacia = await inspeccion.transaction('r', TABLAS.map(t => inspeccion[t]), async () =>
+        (await Promise.all(TABLAS.map(t => inspeccion[t].count()))).every(n => n === 0)
+      )
+      if (vacia) yaExiste = false
+    } finally {
+      inspeccion.close()
+    }
+  }
+  if (!yaExiste) {
+    const legada = db.name === NOMBRE_BASE_LEGADA ? db : crearBase(NOMBRE_BASE_LEGADA)
+    try {
+      const conDatos = await legada.transaction('r', TABLAS.map((t) => legada[t]), async () => {
+        const filas = await Promise.all(TABLAS.filter(t => t !== 'config').map(t => legada[t].count()))
+        if (filas.some(n => n > 0)) return true
+        const configLegada = await legada.config.get('general')
+        return !!configLegada && Object.entries(configLegada).some(([k, v]) =>
+          k !== 'ultimoRespaldo' && JSON.stringify(v) !== JSON.stringify(CONFIG_INICIAL[k]))
+      })
+      if (conDatos && !propietario && !confirmarLegado) {
+        return { estado: 'confirmar', migrada: false, nueva: false }
+      }
+      const migrar = conDatos && (propietario === uid || (!propietario && confirmarLegado))
+      // Conservar propietario histórico de otra cuenta: no transferir datos ajenos.
+      if (migrar && !propietario) vincularPropietarioLocal(uid)
+      // Al crear una base vacía, descartar versiones de sincronización heredadas.
+      // Si se migra el legado, marcarlo como pendiente para reconciliarlo con
+      // Supabase antes de considerar que la nueva copia está sincronizada.
+      const claveSync = 'atelune-nube-' + uid
+      if (migrar) {
+        const meta = JSON.parse(localStorage.getItem(claveSync) || '{}')
+        localStorage.setItem(claveSync, JSON.stringify({ ...meta, sucio: true }))
+      } else {
+        localStorage.removeItem(claveSync)
+      }
+      const destino = crearBase(nombre)
+      try {
+        if (migrar) {
+          const datos = {}
+          await legada.transaction('r', TABLAS.map(t => legada[t]), async () => {
+            for (const t of TABLAS) datos[t] = await legada[t].toArray()
+          })
+          await destino.transaction('rw', TABLAS.map(t => destino[t]), async () => {
+            for (const t of TABLAS) await destino[t].bulkPut(datos[t])
+          })
+        }
+        // Solo marcamos el destino como listo tras una transferencia completa.
+        await destino.open()
+        db.close()
+        db = destino
+        await inicializar()
+        return { estado: 'lista', migrada: migrar, nueva: true }
+      } catch (err) {
+        destino.close()
+        throw err
+      }
+    } finally {
+      if (legada !== db) legada.close()
+    }
+  }
+
+  const destino = crearBase(nombre)
+  await destino.open()
+  db.close()
+  db = destino
+  await inicializar()
+  return { estado: 'lista', migrada: false, nueva: false }
+}
 
 // Validación previa a la restauración; compatible con tablas ausentes en respaldos antiguos.
 export function validarRespaldo(datos) {
@@ -153,16 +262,16 @@ export function validarRespaldo(datos) {
     throw new Error('Tabla inválida: ' + t)
   return true
 }
-export async function importarRespaldo(datos) {
+export async function importarRespaldo(datos, { destino = db } = {}) {
   validarRespaldo(datos)
-  await db.transaction('rw', TABLAS.map((t) => db[t]), async () => {
+  await destino.transaction('rw', TABLAS.map((t) => destino[t]), async () => {
     // Un archivo antiguo puede omitir tablas nuevas, pero nunca debe borrar datos actuales sin aviso.
     for (const t of TABLAS) {
-      if (!Array.isArray(datos[t]) && (await db[t].count()) > 0) throw new Error('El respaldo omite una tabla que contiene datos: ' + t)
+      if (!Array.isArray(datos[t]) && (await destino[t].count()) > 0) throw new Error('El respaldo omite una tabla que contiene datos: ' + t)
     }
     for (const t of TABLAS) {
-      await db[t].clear()
-      if (Array.isArray(datos[t])) await db[t].bulkPut(datos[t]) // tablas que no existan en respaldos viejos quedan vacías
+      await destino[t].clear()
+      if (Array.isArray(datos[t])) await destino[t].bulkPut(datos[t]) // tablas que no existan en respaldos viejos quedan vacías
     }
   })
 }
