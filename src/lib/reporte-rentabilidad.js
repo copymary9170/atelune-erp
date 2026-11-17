@@ -20,6 +20,9 @@ export function fechaEntregaPedido(pedido) {
   const h = [...historial].reverse().find(e => e?.estado === 'entregado' && e.fecha)
   if (!h || typeof h.fecha !== 'string') return null
   if (/^\d{4}-\d{2}-\d{2}$/.test(h.fecha)) return fechaValida(h.fecha) ? h.fecha : null
+  // Rechazar fechas imposibles en el origen; Date puede normalizar 30/feb a marzo.
+  const prefijo = /^\d{4}-\d{2}-\d{2}/.exec(h.fecha)?.[0]
+  if (!prefijo || !fechaValida(prefijo)) return null
   // Convertir el timestamp al día local igual que Contabilidad y la interfaz.
   // Esto evita desplazar entregas cerca de medianoche a un mes equivocado.
   const d = new Date(h.fecha)
