@@ -156,6 +156,10 @@ export function validarRespaldo(datos) {
 export async function importarRespaldo(datos) {
   validarRespaldo(datos)
   await db.transaction('rw', TABLAS.map((t) => db[t]), async () => {
+    // Un archivo antiguo puede omitir tablas nuevas, pero nunca debe borrar datos actuales sin aviso.
+    for (const t of TABLAS) {
+      if (!Array.isArray(datos[t]) && (await db[t].count()) > 0) throw new Error('El respaldo omite una tabla que contiene datos: ' + t)
+    }
     for (const t of TABLAS) {
       await db[t].clear()
       if (Array.isArray(datos[t])) await db[t].bulkPut(datos[t]) // tablas que no existan en respaldos viejos quedan vacías
@@ -229,9 +233,12 @@ export async function crearPedidoDesdeCotizacion(cotId) {
 }
 
 /** Cambia el estado de un pedido y mueve el inventario cuando corresponde. */
-export async function cambiarEstadoPedido(id, estado) {
+export async function cambiarEstadoPedido(id, estado, { devolverInventario = false } = {}) {
   return db.transaction('rw', db.pedidos, db.productos, db.movimientos, db.config, async () => {
     const p = await db.pedidos.get(id)
+    if (!p) throw new Error('Pedido no encontrado')
+    if (!Object.hasOwn(ESTADOS_PEDIDO, estado)) throw new Error('Estado de pedido inválido')
+    if (p.estado === 'cancelado' && estado !== 'cancelado') throw new Error('Un pedido cancelado no puede reactivarse automáticamente.')
     const config = await getConfig()
     const ref = codigoPedido(p.numero)
     let descontado = !!p.inventarioDescontado
@@ -242,8 +249,8 @@ export async function cambiarEstadoPedido(id, estado) {
       }
       descontado = true
     }
-    if (estado === 'cancelado' && descontado) {
-      // Devuelve al inventario lo descontado, al costo con el que salió.
+    if (estado === 'cancelado' && descontado && devolverInventario) {
+      // Solo devuelve el material recuperado físicamente y confirmado por la usuaria.
       const salidas = await db.movimientos.where('pedidoId').equals(id).filter((m) => m.tipo === 'salida' && !m.devuelto && (m.origen === 'consumo_produccion' || (!m.origen && m.nota === 'Consumo de producción' && m.referencia === ref))).toArray()
       for (const m of salidas) {
         if (await db.productos.get(m.productoId))
@@ -255,7 +262,7 @@ export async function cambiarEstadoPedido(id, estado) {
     await db.pedidos.update(id, {
       estado,
       inventarioDescontado: descontado,
-      historial: [...(p.historial || []), { fecha: new Date().toISOString(), estado }],
+      historial: [...(p.historial || []), { fecha: new Date().toISOString(), estado, ...(estado === 'cancelado' ? { devolucionInventario: devolverInventario && !descontado ? 'devueltos' : descontado ? 'no_devueltos' : 'sin_consumo' } : {}) }],
     })
   })
 }
