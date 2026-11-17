@@ -54,7 +54,9 @@ export default function CotizacionImprimir() {
           <tbody>
             {c.items.map((it, i) => (
               <tr key={i}>
-                <td>{it.descripcion || `Trabajo ${i + 1}`}{k.renglones[i]?.descuento > 0 && <div className="desglose">Incluye descuento de {usd(k.renglones[i].descuento)}</div>}</td>
+                <td>{it.descripcion || `Trabajo ${i + 1}`}
+                  {k.renglones[i]?.descuentoCantidadPct > 0 && <div className="desglose">Descuento por volumen: {num(k.renglones[i].descuentoCantidadPct)} % (desde {num(k.renglones[i].umbralCantidad)} unidades)</div>}
+                  {k.renglones[i]?.descuento > 0 && <div className="desglose">Descuento total aplicado: {usd(k.renglones[i].descuento)}</div>}</td>
                 <td className="num">{num(it.cantidad)}</td>
                 <td className="num">{usd(k.renglones[i]?.precioUnitario)}</td>
                 <td className="num">{usd(k.renglones[i]?.precio)}</td>

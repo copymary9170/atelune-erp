@@ -1,5 +1,6 @@
 import Dexie from 'dexie'
 import { aplicarMovimiento, calcularCotizacion, consumoPedido, faltantesDeCosto, personas } from './lib/calc.js'
+import { prepararDuplicadoCotizacion } from './lib/escalas-cotizaciones.js'
 
 // Base de datos local (IndexedDB, dentro del navegador).
 // Toda la lógica de datos pasa por este archivo para poder migrar
@@ -273,6 +274,18 @@ export async function importarRespaldo(datos, { destino = db } = {}) {
       await destino[t].clear()
       if (Array.isArray(datos[t])) await destino[t].bulkPut(datos[t]) // tablas que no existan en respaldos viejos quedan vacías
     }
+  })
+}
+
+// Crea una nueva cotización sin alterar el original ni su pedido asociado.
+export async function duplicarCotizacion(id) {
+  return db.transaction('rw', db.cotizaciones, async () => {
+    const origen = await db.cotizaciones.get(Number(id))
+    if (!origen) throw new Error('Cotización original no encontrada.')
+    const ultima = await db.cotizaciones.orderBy('numero').last()
+    const numero = Math.max(0, Number(ultima?.numero) || 0) + 1
+    const fecha = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+    return db.cotizaciones.add(prepararDuplicadoCotizacion(origen, numero, fecha))
   })
 }
 

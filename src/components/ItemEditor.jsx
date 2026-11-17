@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Campo, Selector } from './ui.jsx'
 import TintaArchivo from './TintaArchivo.jsx'
 import { costoHoraActivo, n, personas } from '../lib/calc.js'
+import { descuentoPorCantidad, escalasInvalidas } from '../lib/escalas-cotizaciones.js'
 import { usd } from '../lib/format.js'
 
 // Editor de un trabajo (se usa en plantillas y en renglones de cotización).
@@ -86,6 +87,33 @@ export default function ItemEditor({ item, onCambio, productos, activos, config,
       </div>
 
       {esCotizacion && (
+        <div className="subtabla">
+          <h4>Precios por cantidad</h4>
+          <p className="ayuda">Define desde cuántas unidades aplicar un descuento adicional. Se usa únicamente el escalón más alto alcanzado; los escalones no se acumulan y no alteran los costos.</p>
+          {(item.escalasCantidad || []).map((escala, i) => (
+            <div className="fila" key={i}>
+              <Campo label="Desde (unidades)" tipo="number" valor={escala.desde}
+                onCambio={(v) => setSub('escalasCantidad', i, 'desde', v)} />
+              <Campo label="Descuento adicional (%)" tipo="number" valor={escala.descuentoPct}
+                onCambio={(v) => setSub('escalasCantidad', i, 'descuentoPct', v)} />
+              <div className="campo auto"><button className="peligro mini"
+                aria-label={'Quitar escalón ' + (i + 1)}
+                onClick={() => quitar('escalasCantidad', i)}>Quitar</button></div>
+            </div>
+          ))}
+          <button className="sec mini" onClick={() => agregar('escalasCantidad', { desde: '', descuentoPct: '' })}>
+            + Agregar escalón
+          </button>
+          {escalasInvalidas(item.escalasCantidad || []) && (
+            <p className="pendiente" role="alert">Los escalones deben tener un umbral entero positivo, un descuento entre 0 y 100 % y umbrales diferentes.</p>
+          )}
+          {!!(item.escalasCantidad || []).length && !escalasInvalidas(item.escalasCantidad) && (
+            <p className="ayuda">Para {n(item.cantidad)} unidad(es): descuento por volumen {descuentoPorCantidad(item.cantidad, item.escalasCantidad).descuentoPct} %.</p>
+          )}
+        </div>
+      )}
+
+      {esCotizacion && (
         <div className="fila">
           <Campo label="Margen (%) — vacío usa el de la línea" tipo="number" valor={item.margenPct} onCambio={(v) => set('margenPct', v)}
             placeholder={lineas.find((l) => l.id === Number(item.lineaId))?.margenPct?.toString() ?? ''} />
@@ -98,5 +126,5 @@ export default function ItemEditor({ item, onCambio, productos, activos, config,
 
 export const itemVacio = () => ({
   descripcion: '', lineaId: '', cantidad: 1, materiales: [], maquinas: [],
-  minutosDiseno: null, minutosProduccion: null, mermaPct: null, extras: [], margenPct: null, descuentoPct: null,
+  minutosDiseno: null, minutosProduccion: null, mermaPct: null, extras: [], margenPct: null, descuentoPct: null, escalasCantidad: [],
 })
