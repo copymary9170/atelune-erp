@@ -8,7 +8,13 @@ export const BANCOS_VENEZUELA = Object.freeze([
   { nombre: 'BNC', url: 'https://www.bncenlinea.com/productos-y-servicios/servicios' },
 ])
 
+export const BANCOS_MENUDEO_PRINCIPALES = Object.freeze(['Mercantil', 'Banesco', 'Banco de Venezuela (BDV)'])
+
 export const TIPOS_LOTE = Object.freeze(['bcv_usd', 'bcv_eur', 'usdt', 'calle', 'menudeo'])
+export const filasLoteIniciales = () => [
+  ...TIPOS_LOTE.filter(tipo => tipo !== 'menudeo').map(crearFilaLote),
+  ...BANCOS_MENUDEO_PRINCIPALES.map(entidad => ({ ...crearFilaLote('menudeo'), entidad })),
+]
 export const crearFilaLote = tipo => ({
   tipo, tasa: null, usdPorUnidad: null, entidad: tipo === 'menudeo' ? BANCOS_VENEZUELA[0].nombre : '',
   sentido: 'compra', comisionPct: 0, origen: 'manual', enlace: '',
