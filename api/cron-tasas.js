@@ -1,4 +1,4 @@
-import { interpretarBCV, URL_BCV } from '../src/lib/tasas-automaticas.js'
+import { interpretarBCV, interpretarUSDTReferenciasVE, URL_BCV } from '../src/lib/tasas-automaticas.js'
 
 // Vercel Cron: solo servidor, solo con CRON_SECRET, sin sesión del navegador.
 // La tabla compartida es append-only y los datos personales no se actualizan.
@@ -25,6 +25,21 @@ export default async function handler(req,res) {
     if (!respuesta.ok) throw new Error('BCV Today HTTP ' + respuesta.status)
     const hoy=new Date().toISOString().slice(0,10)
     const registros=interpretarBCV(await respuesta.json(),hoy)
+    // El feed USDT es opcional: jamás usar el código de referencia de una
+    // solicitud como si fuera una API key. Fallo del proveedor no bloquea BCV.
+    const proveedorKey=process.env.REFERENCIASVE_API_KEY
+    let avisoProveedor=''
+    if (proveedorKey) {
+      try {
+        const externa=await fetch('https://api.referenciasve.com/rates/latest?currency=USDT&source=BINANCE',{
+          headers:{'x-api-key':proveedorKey,Accept:'application/json'},signal:ctrl.signal,
+        })
+        if (!externa.ok) throw new Error('API USDT HTTP '+externa.status)
+        registros.push(...interpretarUSDTReferenciasVE(await externa.json(),hoy))
+      } catch {
+        avisoProveedor='USDT no se incorporó: proveedor ausente, inválido o no disponible.'
+      }
+    }
     const endpoint=supaUrl.replace(/\/+$/,'')+'/rest/v1/atelune_tasas_automaticas'
     const guardar=await fetch(endpoint,{
       method:'POST',signal:ctrl.signal,
@@ -42,6 +57,7 @@ export default async function handler(req,res) {
     return res.status(200).json({
       estado:'ok',recibidas:registros.length,tipos:registros.map(x=>x.tipo),
       fecha_valor:registros[0].fecha_valor,
+      avisoProveedor,
       mensaje:'Referencias verificadas e insertadas sin modificar valores anteriores; duplicados ignorados.',
     })
   } catch(e) {
