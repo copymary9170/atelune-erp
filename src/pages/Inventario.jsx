@@ -4,6 +4,7 @@ import { db, registrarMovimiento, registrarCompra, TIPOS_PRODUCTO, UNIDADES } fr
 import { Campo, Modal, Selector, SelectorPago, useConfig } from '../components/ui.jsx'
 import { n, repartirDelivery } from '../lib/calc.js'
 import { monedaEfectivo } from '../lib/caja.js'
+import TasaOperacion from '../components/TasaOperacion.jsx'
 import { usd, num, fecha, hoy } from '../lib/format.js'
 
 const opcionesTipo = Object.entries(TIPOS_PRODUCTO).map(([value, label]) => ({ value, label }))
@@ -187,6 +188,7 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
   const [nota, setNota] = useState('')
   const [proveedorId, setProveedorId] = useState('')
   const [pagadoCon, setPagadoCon] = useState('')
+  const [tasaMov, setTasaMov] = useState({ tasa: null, tipoTasa: 'bcv_usd', tasaDetalle: null })
   const config = useConfig()
   const proveedores = useLiveQuery(() => db.proveedores.orderBy('nombre').toArray(), [], [])
   const factor = n(p.factor) || 1
@@ -196,12 +198,15 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
     if (tipo !== 'ajuste' && !(cantUso > 0)) return alert('Escribe una cantidad mayor que 0.')
     if (tipo === 'ajuste' && (cantidad == null || cantidad < 0)) return alert('Escribe el stock contado.')
     if (tipo === 'entrada' && costoTotal == null) return alert('Escribe cuánto pagaste en total.')
+    if (tipo === 'entrada' && (monedaEfectivo(pagadoCon) === 'Bs' || /pago\s*m[oó]vil/i.test(pagadoCon)) && !(Number(tasaMov.tasa) > 0)) return alert('Indica la tasa aplicada al pago en Bs.')
     await registrarMovimiento({
       productoId: p.id, tipo, cantidad: cantUso,
       costoUnitario: tipo === 'entrada' ? n(costoTotal) / cantUso : undefined,
       fecha: f, referencia, nota,
       proveedorId: tipo === 'entrada' && proveedorId ? Number(proveedorId) : null,
       pagadoCon: tipo === 'entrada' ? pagadoCon || null : null,
+      tasa: tipo === 'entrada' ? tasaMov.tasa : null,
+      tasaDetalle: tipo === 'entrada' ? tasaMov.tasaDetalle : null,
     })
     onCerrar()
   }
@@ -229,6 +234,8 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
           opciones={proveedores.map((x) => ({ value: x.id, label: x.nombre }))} />
       )}
       {tipo === 'entrada' && <SelectorPago valor={pagadoCon} onCambio={setPagadoCon} metodos={config.metodosPago || []} />}
+      {tipo === 'entrada' && <TasaOperacion valor={tasaMov} fecha={f} montoUsd={costoTotal}
+        onCambio={cambios => setTasaMov(actual => ({ ...actual, ...cambios }))} />}
       <Campo label="Referencia" valor={referencia} onCambio={setReferencia} placeholder="N.º de factura, nota de entrega…" />
       <Campo label="Nota" valor={nota} onCambio={setNota} />
       <div className="modal-pie">
@@ -272,7 +279,7 @@ function Kardex({ producto: p, onCerrar }) {
 // Compra de varios materiales con delivery repartido entre ellos.
 function CompraForm({ productos, config, onCerrar }) {
   const proveedores = useLiveQuery(() => db.proveedores.orderBy('nombre').toArray(), [], [])
-  const [c, setC] = useState({ fecha: hoy(), proveedorId: '', pagadoCon: '', referencia: '', delivery: null, modo: 'costo', tasa: null })
+  const [c, setC] = useState({ fecha: hoy(), proveedorId: '', pagadoCon: '', referencia: '', delivery: null, modo: 'costo', tasa: null, tipoTasa: 'bcv_usd', tasaDetalle: null })
   const [lineas, setLineas] = useState([{ productoId: '', cantidad: null, unidad: 'compra', costo: null }])
   const set = (k, v) => setC((x) => ({ ...x, [k]: v }))
   const setLinea = (i, k, v) => setLineas((ls) => ls.map((l, j) => (j === i ? { ...l, [k]: v } : l)))
@@ -282,14 +289,14 @@ function CompraForm({ productos, config, onCerrar }) {
   const total = lineas.reduce((s, l) => s + n(l.costo), 0) + n(c.delivery)
 
   async function guardar() {
-    if (monedaEfectivo(c.pagadoCon) === 'Bs' && !(Number(c.tasa) > 0 && Number.isFinite(Number(c.tasa)))) return alert('Para pagar en efectivo Bs debes indicar la tasa Bs/$ utilizada.')
+    if ((monedaEfectivo(c.pagadoCon) === 'Bs' || /pago\s*m[oó]vil/i.test(c.pagadoCon)) && !(Number(c.tasa) > 0 && Number.isFinite(Number(c.tasa)))) return alert('Para pagar en bolívares debes indicar la tasa utilizada.')
     if (lineas.some((l) => !prod(l))) return alert('Elige el producto de cada línea.')
     if (lineas.some((l) => !(cantUso(l) > 0))) return alert('Escribe la cantidad de cada línea.')
     if (lineas.some((l) => l.costo == null)) return alert('Escribe lo que pagaste por cada línea (sin delivery).')
     if (new Set(lineas.map((l) => Number(l.productoId))).size !== lineas.length) return alert('Hay un producto repetido: júntalo en una sola línea.')
     await registrarCompra({
       lineas: lineas.map((l, i) => ({ productoId: Number(l.productoId), cantidadUso: cantUso(l), costoTotal: n(l.costo) + partes[i] })),
-      fecha: c.fecha, proveedorId: c.proveedorId ? Number(c.proveedorId) : null, pagadoCon: c.pagadoCon || null, referencia: c.referencia, tasa: c.tasa,
+      fecha: c.fecha, proveedorId: c.proveedorId ? Number(c.proveedorId) : null, pagadoCon: c.pagadoCon || null, referencia: c.referencia, tasa: c.tasa, tasaDetalle: c.tasaDetalle,
       nota: n(c.delivery) > 0 ? `Incluye delivery repartido (${usd(c.delivery)} en total)` : '',
     })
     onCerrar()
@@ -329,8 +336,10 @@ function CompraForm({ productos, config, onCerrar }) {
         <Selector label="Repartir el delivery" valor={c.modo} onCambio={(v) => set('modo', v)}
           opciones={[{ value: 'costo', label: 'Según lo pagado por cada material' }, { value: 'igual', label: 'En partes iguales' }]} />
         <SelectorPago valor={c.pagadoCon} onCambio={(v) => set('pagadoCon', v)} metodos={config.metodosPago || []} />
-        {monedaEfectivo(c.pagadoCon) === 'Bs' && <Campo label="Tasa Bs/$ aplicada a esta compra" tipo="number" valor={c.tasa} onCambio={(v) => set('tasa', v)} />}
+
       </div>
+      <TasaOperacion valor={c} fecha={c.fecha} montoUsd={total}
+        onCambio={cambios => setC(actual => ({ ...actual, ...cambios }))} />
       <p className="ayuda">Total de la compra: <strong>{usd(total)}</strong>. El delivery se suma al costo de cada material, así el costo por unidad queda completo.</p>
       <div className="modal-pie">
         <button className="sec" onClick={onCerrar}>Cancelar</button>
