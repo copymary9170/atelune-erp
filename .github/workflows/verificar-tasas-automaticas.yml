@@ -5,13 +5,15 @@ on:
   pull_request:
     paths:
       - 'api/cron-tasas.js'
+      - 'api/tasas-bancos.js'
       - 'src/lib/tasas-automaticas.js'
       - 'src/lib/use-tasas-automaticas.js'
       - 'src/pages/Tasas.jsx'
       - 'src/components/TasaOperacion.jsx'
       - 'tests/tasas-automaticas.test.js'
+      - 'tests/tasas-bancos-api.test.js'
       - 'vercel.json'
-      - 'supabase/tasas_automaticas.sql'
+      - 'supabase/tasas_automaticas*.sql'
 permissions:
   contents: read
 jobs:

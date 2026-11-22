@@ -57,7 +57,8 @@ test('auth de Supabase y respuesta bancaria filtrada sin exponer credenciales',a
       llamadas.push({url,opts})
       if(url.endsWith('/auth/v1/user'))return {ok:true,json:async()=>({id:'uid-ficticio'})}
       if(url.includes('referenciasve.com'))return{ok:true,json:async()=>[
-        {type:'BANK',currency:'USD',entityName:'Mercantil',price:'270.5',createdAt:'2026-11-22T13:00:00Z',extra:'dato_no_necesario'},
+        {type:'BANK',currency:'USD',source:'EXCHANGE_MONITOR',entityName:'Mercantil',price:'270.5',createdAt:'2026-11-22T13:00:00Z',extra:'dato_no_necesario'},
+        {type:'BANK',currency:'USD',source:'OTRA',entityName:'Banesco',price:'999'},
         {type:'FIAT',currency:'USD',entityName:'BCV',price:'250',createdAt:'2026-11-22T13:00:00Z'},
       ]}
       throw Error('No esperado: '+url)
@@ -69,6 +70,7 @@ test('auth de Supabase y respuesta bancaria filtrada sin exponer credenciales',a
     assert.equal(res.cuerpo.datos[0].entityName,'Mercantil')
     assert.equal(res.cuerpo.datos[0].extra,undefined)
     assert.equal(llamadas.length,2)
+    assert.ok(llamadas.every(({opts})=>opts.redirect==='error'))
     assert.equal(llamadas[1].opts.headers['x-api-key'],'clave-ficticia-no-real')
     assert.ok(!JSON.stringify(res.cuerpo).includes('clave-ficticia-no-real'))
   }finally{globalThis.fetch=fetchOriginal;restaurar()}
