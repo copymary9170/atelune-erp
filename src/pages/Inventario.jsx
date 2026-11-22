@@ -340,6 +340,7 @@ function CompraForm({ productos, config, onCerrar }) {
 
       </div>
       <TasaOperacion valor={c} fecha={c.fecha} montoUsd={total}
+        opcional={!(monedaEfectivo(c.pagadoCon) === 'Bs' || /pago\s*m[oó]vil/i.test(c.pagadoCon))}
         onCambio={cambios => setC(actual => ({ ...actual, ...cambios }))} />
       <p className="ayuda">Total de la compra: <strong>{usd(total)}</strong>. El delivery se suma al costo de cada material, así el costo por unidad queda completo.</p>
       <div className="modal-pie">
