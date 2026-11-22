@@ -1,16 +1,35 @@
-// Vercel serverless; opt-in feed de referencia, sin acceder a cuentas bancarias.
-// La clave NUNCA se entrega al navegador; configurar REFERENCIASVE_API_KEY en Vercel.
+// Consulta opt-in de un proveedor de referencias bancarias.
+// Requiere API key contratada y sesión Supabase REAL; no expone claves al navegador.
+function envPublica(regex) {
+  const name = Object.keys(process.env).find(k => regex.test(k) && process.env[k])
+  return name ? process.env[name] : ''
+}
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'GET') return res.status(405).json({ error: 'Método no permitido' })
   const key = process.env.REFERENCIASVE_API_KEY
   if (!key) return res.status(503).json({
-    error: 'La integración con agregadores bancarios requiere una clave de API autorizada.',
+    error: 'La consulta de bancos requiere una clave de API autorizada. Puedes ingresar tasas manualmente y verificar cada banco en su página oficial.',
     configurada: false,
   })
+  const url = envPublica(/(?:^|_)SUPABASE_URL$/)
+  const anon = envPublica(/(?:^|_)SUPABASE_(?:ANON_KEY|PUBLISHABLE_KEY)$/)
+  if (!url || !anon) return res.status(503).json({ error: 'No se configuró autenticación Supabase para este servicio.' })
+  const bearer = req.headers.authorization
+  if (typeof bearer !== 'string' || !/^Bearer [A-Za-z0-9_.-]+$/.test(bearer))
+    return res.status(401).json({ error: 'Inicia sesión en Atelune para consultar referencias de bancos.' })
+
+  // Verifica el JWT contra Supabase Auth. Nunca aceptar un UID enviado por el cliente.
   const ctrl = new AbortController()
-  const timeout = setTimeout(() => ctrl.abort(), 8500)
+  const timeout = setTimeout(() => ctrl.abort(), 9000)
   try {
+    const auth = await fetch(url.replace(/\/+$/, '') + '/auth/v1/user', {
+      headers: { Authorization: bearer, apikey: anon },
+      signal: ctrl.signal,
+    })
+    if (!auth.ok) return res.status(401).json({ error: 'Sesión no válida; inicia sesión nuevamente.' })
+    const user = await auth.json()
+    if (!user?.id) return res.status(401).json({ error: 'No se pudo autenticar el usuario.' })
     const remote = await fetch('https://api.referenciasve.com/rates/banks?currency=USD', {
       headers: { 'x-api-key': key, Accept: 'application/json' },
       signal: ctrl.signal,
