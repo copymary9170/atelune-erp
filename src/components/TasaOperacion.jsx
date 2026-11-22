@@ -3,11 +3,13 @@ import { db } from '../db.js'
 import { Campo, Selector } from './ui.jsx'
 import { TIPOS_TASA, crearDetalleTasa, seleccionarTasa } from '../lib/tasas-multiples.js'
 import { bs } from '../lib/format.js'
+import { useTasasAutomaticas } from '../lib/use-tasas-automaticas.js'
 
 // Componente controlado: solo usa la tasa guardada al pulsar explícitamente "Usar".
 // Las operaciones históricas conservan su tasa efectiva y el detalle congelado.
 export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcional = true }) {
   const registros = useLiveQuery(() => db.tasas.toArray(), [], [])
+  const { registros: automaticas } = useTasasAutomaticas()
   const tipo = valor.tipoTasa || valor.tasaDetalle?.tipo ||
     (valor.tasa != null ? 'legado' : 'bcv_usd')
   const d = valor.tasaDetalle
@@ -19,6 +21,9 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
   const sentido = borrador.sentido ?? (d?.tipo === tipo ? d.sentido : 'compra')
   const comisionPct = borrador.comisionPct ?? (d?.tipo === tipo ? d.comisionPct : 0)
   const tasaRegistrada = seleccionarTasa(registros || [], tipo, fecha || '9999-12-31')
+  const tasaAutomatica = automaticas.find(r => r.tipo === tipo &&
+    r.fecha_valor <= (fecha || '9999-12-31') &&
+    (tipo !== 'menudeo' || (r.entidad === entidad && r.sentido === sentido)))
   const campos = {
     tasa: tasaCapturada, usdPorUnidad, entidad, sentido, comisionPct,
     referenciaId: borrador.referenciaId ?? null,
@@ -49,6 +54,26 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
     } catch {}
     onCambio({ tipoTasa: tipo, tasa: detalle?.efectivaBsPorUsd ?? null,
       tasaDetalle: detalle, tasaBorrador: siguiente })
+  }
+  function usarAutomatica() {
+    if (!tasaAutomatica) return
+    const t = tasaAutomatica
+    const datos = {
+      tasa: Number(t.bs_por_unidad),
+      usdPorUnidad: tipo === 'bcv_eur' || tipo === 'usdt' ? '' : 1,
+      entidad: t.entidad || '', sentido: t.sentido || 'compra', comisionPct: 0,
+      fechaReferencia: t.fecha_valor, horaReferencia: null,
+      referenciaId: null,
+    }
+    try {
+      const detalle = crearDetalleTasa({ tipo, ...datos, fecha: t.fecha_valor })
+      onCambio({tipoTasa:tipo,tasa:detalle.efectivaBsPorUsd,
+        tasaDetalle:{...detalle,fuenteExterna:t.fuente,urlFuente:t.url_fuente,referenciaAutomaticaId:t.id},
+        tasaBorrador:datos})
+    } catch {
+      onCambio({tipoTasa:tipo,tasa:null,tasaDetalle:null,
+        tasaBorrador:datos})
+    }
   }
   function usarRegistrada() {
     if (!tasaRegistrada) return
@@ -92,6 +117,12 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
         <label>Última tasa registrada</label>
         <button className="sec mini" type="button" disabled={!tasaRegistrada} onClick={usarRegistrada}>
           {tasaRegistrada ? 'Usar ' + tasaRegistrada.fecha : 'No hay tasa de este tipo'}
+        </button>
+      </div>}
+      {tasaAutomatica && <div className="campo auto">
+        <label>Referencia automática verificada</label>
+        <button type="button" className="sec mini" onClick={usarAutomatica}>
+          Usar {tasaAutomatica.fecha_valor} · {tasaAutomatica.fuente}
         </button>
       </div>}
     </div>

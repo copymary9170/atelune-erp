@@ -1,0 +1,30 @@
+name: Verificar automatización de tasas
+on:
+  push:
+    branches: [automatizacion-tasas-verificadas-20261122]
+  pull_request:
+    paths:
+      - 'api/cron-tasas.js'
+      - 'src/lib/tasas-automaticas.js'
+      - 'src/lib/use-tasas-automaticas.js'
+      - 'src/pages/Tasas.jsx'
+      - 'src/components/TasaOperacion.jsx'
+      - 'tests/tasas-automaticas.test.js'
+      - 'vercel.json'
+      - 'supabase/tasas_automaticas.sql'
+permissions:
+  contents: read
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - run: npm run build
