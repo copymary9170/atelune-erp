@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, tasaVigente, duplicarCotizacion } from '../db.js'
+import { db, duplicarCotizacion } from '../db.js'
 import { Campo, Selector } from '../components/ui.jsx'
 import { usd, bs, fecha, hoy } from '../lib/format.js'
 
@@ -15,10 +15,10 @@ export const ESTADOS = {
 export async function nuevaCotizacion() {
   const ultima = await db.cotizaciones.orderBy('numero').last()
   const numero = (ultima?.numero ?? 0) + 1
-  const tasa = await tasaVigente()
   return db.cotizaciones.add({
     numero, fecha: hoy(), estado: 'borrador', cliente: '', contactoCliente: '',
-    items: [], envio: null, metodoPagoIdx: 0, aplicarIva: false, tasa: tasa?.tasa ?? null, notas: '', calculo: null,
+    items: [], envio: null, metodoPagoIdx: 0, aplicarIva: false,
+    tasa: null, tipoTasa: 'bcv_usd', tasaDetalle: null, notas: '', calculo: null,
   })
 }
 

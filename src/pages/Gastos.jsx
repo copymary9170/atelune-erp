@@ -3,8 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, codigoPedido } from '../db.js'
 import { Campo, Modal, Selector, SelectorPago, useConfig } from '../components/ui.jsx'
 import { CATEGORIAS_GASTO } from '../lib/contabilidad.js'
+import TasaOperacion from '../components/TasaOperacion.jsx'
 import { n, personas } from '../lib/calc.js'
 import { usd, bs, fecha, hoy } from '../lib/format.js'
+import { TIPOS_TASA } from '../lib/tasas-multiples.js'
 
 export const TIPOS_GASTO = {
   gasto: 'Gasto del negocio',
@@ -86,7 +88,7 @@ export default function Gastos() {
                 <td><span className="etiqueta-tipo">{TIPOS_GASTO[g.tipo]}</span></td>
                 <td>{g.tipo === 'gasto' && <strong>{g.categoria}</strong>}{g.personaNombre && <strong>{g.personaNombre}</strong>} {g.descripcion}{g.proveedorId ? <div className="desglose">{nombreProv(g.proveedorId)}</div> : null}</td>
                 <td>{g.pagadoCon === 'credito' ? <span className="pendiente">a crédito</span> : g.pagadoCon || 'aporte propio'}</td>
-                <td className="num">{usd(g.monto)}{n(g.tasa) > 0 && <div className="desglose">{bs(n(g.monto) * n(g.tasa))}</div>}</td>
+                <td className="num">{usd(g.monto)}{n(g.tasa) > 0 && <div className="desglose">{bs(n(g.monto) * n(g.tasa))}{g.tasaDetalle?.tipo ? ' · ' + (TIPOS_TASA[g.tasaDetalle.tipo]?.nombre || g.tasaDetalle.tipo) : ' · tasa histórica'}</div>}</td>
               </tr>
             ))}
             {!delMes.length && <tr><td colSpan={5} className="vacio">No hay registros en este período.</td></tr>}
@@ -111,6 +113,7 @@ export function GastoForm({ inicial, config, proveedores, onCerrar }) {
   async function guardar() {
     if (!(n(g.monto) > 0)) return alert('Escribe el monto en $.')
     if (!g.fecha) return alert('Escribe la fecha.')
+    if (/efectivo\s*(?:bs|bol[ií]vares)|pago\s*m[oó]vil/i.test(g.pagadoCon || '') && !(Number(g.tasa) > 0)) return alert('Para una operación en bolívares debes indicar una tasa válida.')
     if (g.tipo !== 'gasto' && (!g.pagadoCon || g.pagadoCon === 'credito')) return alert('Elige con qué método se pagó.')
     if (g.tipo === 'pago_proveedor' && !g.proveedorId) return alert('Elige el proveedor.')
     if (aPersona && !g.personaId) return alert('Elige la persona.')
@@ -151,9 +154,11 @@ export function GastoForm({ inicial, config, proveedores, onCerrar }) {
       <Campo label="Descripción" valor={g.descripcion} onCambio={(v) => set('descripcion', v)} placeholder="Ej.: recibo de noviembre, factura N.º…" />
       <div className="fila">
         <Campo label="Monto ($)" tipo="number" valor={g.monto} onCambio={(v) => set('monto', v)} autoFocus />
-        <Campo label="Tasa Bs/$ (si pagaste en Bs)" tipo="number" valor={g.tasa} onCambio={(v) => set('tasa', v)} />
+
       </div>
-      {n(g.tasa) > 0 && n(g.monto) > 0 && <p className="ayuda" style={{ marginTop: -6 }}>= {bs(n(g.monto) * n(g.tasa))}</p>}
+      <TasaOperacion valor={g} fecha={g.fecha} montoUsd={g.monto}
+        opcional={!/efectivo\s*(?:bs|bol[ií]var(?:es)?)|pago\s*m[oó]vil/i.test(g.pagadoCon || '')}
+        onCambio={cambios => setG(actual => ({ ...actual, ...cambios }))} />
       {g.tipo === 'gasto'
         ? <SelectorPago valor={g.pagadoCon ?? ''} onCambio={(v) => set('pagadoCon', v)} metodos={metodos} />
         : <Selector label={g.tipo === 'aporte' ? '¿A dónde entró el dinero?' : '¿De dónde salió el dinero?'} valor={g.pagadoCon ?? ''} onCambio={(v) => set('pagadoCon', v)}

@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, ESTADOS_PEDIDO, ESTADOS_CON_CONSUMO, codigoPedido, cambiarEstadoPedido, tasaVigente } from '../db.js'
+import { db, ESTADOS_PEDIDO, ESTADOS_CON_CONSUMO, codigoPedido, cambiarEstadoPedido } from '../db.js'
 import { Campo, Selector, Modal, useConfig } from '../components/ui.jsx'
 import { codigo } from './Cotizaciones.jsx'
 import RepartoPedido from '../components/RepartoPedido.jsx'
 import FlujoProduccion from '../components/FlujoProduccion.jsx'
 import TiemposProduccion from '../components/TiemposProduccion.jsx'
 import FichaRentabilidad from '../components/FichaRentabilidad.jsx'
+import TasaOperacion from '../components/TasaOperacion.jsx'
 import ConsumoMateriales from '../components/ConsumoMateriales.jsx'
 import { consumoPedido, saldoPedido, totalAbonos, n } from '../lib/calc.js'
 import { usd, bs, num, fecha, hoy } from '../lib/format.js'
+import { TIPOS_TASA } from '../lib/tasas-multiples.js'
 
 const FLUJO = ['aprobado', 'en_diseno', 'en_produccion', 'listo', 'entregado']
 const claseEstado = (e) => (e === 'entregado' ? ' ok' : e === 'cancelado' ? ' bajo' : ['en_diseno', 'en_produccion'].includes(e) ? ' proceso' : ' neutro')
@@ -179,7 +181,7 @@ export function PedidoDetalle() {
               {(p.abonos || []).map((a, i) => (
                 <tr key={i}>
                   <td>{fecha(a.fecha)}{a.anulado && <span className="etiqueta-tipo bajo">Anulado</span>}<div className="desglose">{a.metodo}{a.nota && ' · ' + a.nota}{a.anulado && a.motivoAnulacion && ' · Motivo: ' + a.motivoAnulacion}</div></td>
-                  <td className="num">{a.anulado ? <s>{usd(a.monto)}</s> : usd(a.monto)}{a.tasa ? <div className="desglose">{bs(n(a.monto) * n(a.tasa))}</div> : null}</td>
+                  <td className="num">{a.anulado ? <s>{usd(a.monto)}</s> : usd(a.monto)}{a.tasa ? <div className="desglose">{bs(n(a.monto) * n(a.tasa))}{a.tasaDetalle?.tipo ? ' · ' + (TIPOS_TASA[a.tasaDetalle.tipo]?.nombre || a.tasaDetalle.tipo) : ' · tasa histórica'}</div> : null}</td>
                   <td className="num">{!a.anulado && <button className="peligro mini" onClick={async () => { const motivo = prompt('Motivo de anulación del pago:'); if (!motivo?.trim()) return; await db.transaction('rw',db.pedidos,async () => { const actual = await db.pedidos.get(p.id); const abonos = [...(actual.abonos || [])]; if (abonos[i]?.anulado) return; abonos[i] = {...abonos[i], anulado:true, motivoAnulacion:motivo.trim().slice(0,300), fechaAnulacion:new Date().toISOString()}; await db.pedidos.update(p.id,{abonos}) }) }}>Anular</button>}</td>
                 </tr>
               ))}
@@ -217,16 +219,12 @@ export function PedidoDetalle() {
 }
 
 function AbonoForm({ pedido, saldo, metodos, onCerrar }) {
-  const [a, setA] = useState({ fecha: hoy(), monto: saldo > 0 ? Math.round(saldo * 100) / 100 : null, metodo: metodos[0]?.nombre ?? '', tasa: null, nota: '' })
+  const [a, setA] = useState({ fecha: hoy(), monto: saldo > 0 ? Math.round(saldo * 100) / 100 : null, metodo: metodos[0]?.nombre ?? '', tasa: null, tipoTasa: 'bcv_usd', tasaDetalle: null, nota: '' })
   const set = (k, v) => setA((x) => ({ ...x, [k]: v }))
-  async function usarTasa() {
-    const t = await tasaVigente()
-    if (t) set('tasa', t.tasa)
-    else alert('No hay tasas cargadas.')
-  }
   async function guardar() {
     if (!(n(a.monto) > 0) || !Number.isFinite(Number(a.monto))) return alert('Monto inválido.')
     if (!a.metodo) return alert('Selecciona método de pago.')
+    if (/(?:\b(?:bs\.?|ves|bol[ií]var(?:es)?)\b|pago\s*m[oó]vil)/i.test(a.metodo) && !(Number(a.tasa) > 0)) return alert('El abono en bolívares requiere una tasa de cambio válida.')
     await db.transaction('rw', db.pedidos, async () => { const actual = await db.pedidos.get(pedido.id); if (!actual || actual.estado === 'cancelado') throw new Error('Pedido cancelado'); await db.pedidos.update(pedido.id, { abonos: [...(actual.abonos || []), {...a, registradoEn:new Date().toISOString()}] }) })
     onCerrar()
   }
@@ -238,10 +236,9 @@ function AbonoForm({ pedido, saldo, metodos, onCerrar }) {
         <Campo label="Monto ($)" tipo="number" valor={a.monto} onCambio={(v) => set('monto', v)} autoFocus />
         <Selector label="Método" valor={a.metodo} onCambio={(v) => set('metodo', v)} opciones={metodos.map((m) => ({ value: m.nombre, label: m.nombre }))} />
       </div>
-      <div className="fila">
-        <Campo label="Tasa Bs/$ (si pagó en Bs)" tipo="number" valor={a.tasa} onCambio={(v) => set('tasa', v)} />
-        <div className="campo auto"><button className="sec" onClick={usarTasa}>Tasa del día</button></div>
-      </div>
+      <TasaOperacion valor={a} fecha={a.fecha} montoUsd={a.monto}
+        opcional={!/efectivo\s*(?:bs|bol[ií]var(?:es)?)|pago\s*m[oó]vil/i.test(a.metodo || '')}
+        onCambio={cambios => setA(actual => ({ ...actual, ...cambios }))} />
       {n(a.tasa) > 0 && n(a.monto) > 0 && <p className="ayuda">= {bs(n(a.monto) * n(a.tasa))}</p>}
       <Campo label="Nota" valor={a.nota} onCambio={(v) => set('nota', v)} placeholder="N.º de referencia, abono inicial…" />
       <div className="modal-pie"><button className="sec" onClick={onCerrar}>Cancelar</button><button onClick={guardar}>Guardar pago</button></div>

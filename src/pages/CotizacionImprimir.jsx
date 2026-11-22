@@ -4,6 +4,7 @@ import { db } from '../db.js'
 import { Logo, useConfig } from '../components/ui.jsx'
 import { codigo } from './Cotizaciones.jsx'
 import { usd, bs, num, fecha } from '../lib/format.js'
+import { TIPOS_TASA } from '../lib/tasas-multiples.js'
 
 function sumarDias(iso, dias) {
   const d = new Date(iso + 'T00:00:00')
@@ -72,7 +73,7 @@ export default function CotizacionImprimir() {
             {k.comision > 0 && <tr><td>Recargo método de pago</td><td className="num">{usd(k.comision)}</td></tr>}
             {k.iva > 0 && <tr><td>IVA ({num(config.ivaPct)} %)</td><td className="num">{usd(k.iva)}</td></tr>}
             <tr className="total"><td>Total</td><td className="num">{usd(k.total)}</td></tr>
-            {k.totalBs != null && <tr><td className="desglose">En Bs (tasa {num(c.tasa, 4)})</td><td className="num desglose">{bs(k.totalBs)}</td></tr>}
+            {k.totalBs != null && <tr><td className="desglose">En Bs (tasa efectiva {num(c.tasa, 4)} Bs/USD{c.tasaDetalle?.tipo ? ' · ' + (TIPOS_TASA[c.tasaDetalle.tipo]?.nombre || c.tasaDetalle.tipo) : ''})</td><td className="num desglose">{bs(k.totalBs)}</td></tr>}
           </tbody>
         </table>
 
