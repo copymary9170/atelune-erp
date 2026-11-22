@@ -27,6 +27,8 @@ export default function Tasas() {
     ? { ...f, [campo]: valor, ...(campo === 'tasa' ? { origen: 'manual', enlace: '' } : {}) } : f))
   const agregarBanco = () => setFilas(actual => actual.length < 40
     ? [...actual, crearFilaLote('menudeo')] : actual)
+  const agregarPersonalizada = () => setFilas(actual => actual.length < 40
+    ? [...actual, crearFilaLote('personalizada')] : actual)
 
   async function consultarBCV() {
     setError(''); setMensaje(''); setOcupado(true)
@@ -144,14 +146,15 @@ export default function Tasas() {
               opciones={[{value:'compra',label:'Compras divisas'},{value:'venta',label:'Vendes divisas'}]} />
             <Campo label="Comisión (%) informativa" tipo="number" valor={f.comisionPct} onCambio={v => cambiar(i,'comisionPct',v)} />
           </>}
-          {f.tipo === 'menudeo' && i >= TIPOS_LOTE.length && <div className="campo auto">
-            <button type="button" className="sec mini" onClick={() => setFilas(prev => prev.filter((_,j) => j !== i))}>Quitar banco</button>
+          {i >= TIPOS_LOTE.length && <div className="campo auto">
+            <button type="button" className="sec mini" onClick={() => setFilas(prev => prev.filter((_,j) => j !== i))}>Quitar fila</button>
           </div>}
         </div>
         {f.origen !== 'manual' && <p className="ayuda">Importada de {f.origen} (aún sin guardar). Confirma la fecha y el importe.</p>}
       </div>)}
       <div className="fila">
         <div className="campo auto"><button type="button" className="sec" onClick={agregarBanco} disabled={filas.length >= 40}>+ Otro banco / compra o venta</button></div>
+        <div className="campo auto"><button type="button" className="sec" onClick={agregarPersonalizada} disabled={filas.length >= 40}>+ Tasa personalizada</button></div>
         <div className="campo auto"><button type="submit" disabled={ocupado}>{ocupado ? 'Procesando…' : 'Guardar todas las tasas completadas'}</button></div>
       </div>
       <p className="ayuda">Menudeo: se guarda por banco y por sentido. Las comisiones se registran como información y no se aplican dos veces. La consulta de tasas no accede a cuentas bancarias ni realiza pagos.</p>
