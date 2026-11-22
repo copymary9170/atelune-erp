@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { interpretarBCV, elegirAutomaticas } from '../src/lib/tasas-automaticas.js'
+import { interpretarBCV, interpretarUSDTReferenciasVE, elegirAutomaticas } from '../src/lib/tasas-automaticas.js'
 import cron from '../api/cron-tasas.js'
 
 const r=()=>({statusCode:null,body:null,headers:{},setHeader(k,v){this.headers[k]=v},
@@ -10,7 +10,8 @@ test('BCV automático valida EUR/USD, fecha, no importa valores futuros o invál
   assert.equal(x.length,2)
   assert.deepEqual(x.map(x=>x.tipo),['bcv_usd','bcv_eur'])
   assert.ok(x.every(x=>x.fecha_valor==='2026-11-20' && x.confirmado))
-  assert.throws(()=>interpretarBCV({USD:240,EUR:281,effective_date:'2026-11-23'},'2026-11-22'),/Fecha valor/)
+  assert.equal(interpretarBCV({USD:240,EUR:281,effective_date:'2026-11-23'},'2026-11-22')[0].fecha_valor,'2026-11-23')
+  assert.throws(()=>interpretarBCV({USD:240,EUR:281,effective_date:'2026-12-02'},'2026-11-22'),/vigencia futura/)
   assert.throws(()=>interpretarBCV({USD:240,EUR:0,effective_date:'2026-11-22'},'2026-11-22'),/Valor/)
   assert.throws(()=>interpretarBCV({USD:240,EUR:281,effective_date:'2026-10-01'},'2026-11-22'),/antigua/)
 })
@@ -65,4 +66,21 @@ test('cron escribe 2 referencias con service key server-side; reintentos ignoran
     for(const [k,v] of Object.entries({CRON_SECRET:save.secret,SUPABASE_SERVICE_ROLE_KEY:save.svc,SUPABASE_URL:save.url}))
       if(v===undefined)delete process.env[k];else process.env[k]=v
   }
+})
+
+test('USDT solo acepta referencia BINANCE con timestamp y par validado',()=>{
+  const r=interpretarUSDTReferenciasVE([
+    {type:'CRYPTO',currency:'USDT',source:'BINANCE',price:'296.725',
+      createdAt:'2026-11-21T13:00:00.000Z'},
+    {type:'FIAT',currency:'USD',source:'BCV',price:'230',
+      createdAt:'2026-11-21T13:00:00.000Z'},
+  ],'2026-11-22')
+  assert.equal(r.length,1)
+  assert.equal(r[0].bs_por_unidad,296.725)
+  assert.equal(r[0].moneda,'USDT')
+  assert.equal(interpretarUSDTReferenciasVE([],'2026-11-22').length,0)
+  assert.throws(()=>interpretarUSDTReferenciasVE([
+    {type:'CRYPTO',currency:'USDT',source:'BINANCE',price:0,
+      createdAt:'2026-11-21T13:00:00.000Z'},
+  ],'2026-11-22'),/Valor/)
 })
