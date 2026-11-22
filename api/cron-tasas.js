@@ -1,4 +1,4 @@
-import { interpretarBCV, interpretarUSDTReferenciasVE, URL_BCV } from '../src/lib/tasas-automaticas.js'
+import { interpretarBCV, interpretarUSDTReferenciasVE, interpretarBancosReferenciasVE, URL_BCV } from '../src/lib/tasas-automaticas.js'
 
 // Vercel Cron: solo servidor, solo con CRON_SECRET, sin sesión del navegador.
 // La tabla compartida es append-only y los datos personales no se actualizan.
@@ -38,6 +38,15 @@ export default async function handler(req,res) {
         registros.push(...interpretarUSDTReferenciasVE(await externa.json(),hoy))
       } catch {
         avisoProveedor='USDT no se incorporó: proveedor ausente, inválido o no disponible.'
+      }
+      try {
+        const bancos=await fetch('https://api.referenciasve.com/rates/banks?currency=USD',{
+          headers:{'x-api-key':proveedorKey,Accept:'application/json'},signal:ctrl.signal,
+        })
+        if (!bancos.ok) throw new Error('API bancaria HTTP '+bancos.status)
+        registros.push(...interpretarBancosReferenciasVE(await bancos.json(),hoy))
+      } catch {
+        avisoProveedor += ' Bancos no incorporados: el proveedor exige plan Basic, está inaccesible o no ofrece datos recientes.'
       }
     }
     const endpoint=supaUrl.replace(/\/+$/,'')+'/rest/v1/atelune_tasas_automaticas'
