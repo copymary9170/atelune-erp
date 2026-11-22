@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db.js'
 import { Campo, Selector } from '../components/ui.jsx'
 import { fecha, hoy, num } from '../lib/format.js'
-import { TIPOS_TASA, crearDetalleTasa, tipoTasaHistorica } from '../lib/tasas-multiples.js'
+import { TIPOS_TASA, crearRegistroTasa, tipoTasaHistorica } from '../lib/tasas-multiples.js'
 
 export default function Tasas() {
   const tasas = useLiveQuery(() => db.tasas.orderBy('fecha').reverse().toArray(), [], [])
@@ -17,16 +17,12 @@ export default function Tasas() {
     e.preventDefault()
     setError('')
     try {
-      const detalle = crearDetalleTasa(f)
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(f.fecha)) throw new Error('Introduce una fecha válida.')
-      if (f.hora && !/^([01]\d|2[0-3]):[0-5]\d$/.test(f.hora)) throw new Error('Hora inválida.')
-      // Historial append-only: actualizar la tasa del día NO altera operaciones
-      // ni sobrescribe tasas de otras fuentes o momentos del mismo día.
+      const registro = crearRegistroTasa(f)
+      // El libro permite guardar Bs/EUR o Bs/USDT sin conocer USD por unidad.
+      // Al aplicarlas en operaciones USD, sí se exigirá esa equivalencia.
       await db.tasas.add({
-        fecha: f.fecha, hora: f.hora || new Date().toTimeString().slice(0, 5),
-        tipo: f.tipo, tasa: detalle.bsPorUnidad, usdPorUnidad: detalle.usdPorUnidad,
-        unidad: detalle.unidad, fuente: tipo.nombre, entidad: detalle.entidad,
-        sentido: detalle.sentido, comisionPct: detalle.comisionPct,
+        ...registro,
+        hora: registro.hora || new Date().toTimeString().slice(0, 5),
         registradoEn: new Date().toISOString(),
       })
       setF(prev => ({ ...prev, tasa: null, usdPorUnidad: null }))
@@ -51,9 +47,9 @@ export default function Tasas() {
         <Campo label={'Bs por 1 ' + tipo.unidad} tipo="number" valor={f.tasa} onCambio={v => set('tasa', v)} />
       </div>
       {(f.tipo === 'bcv_eur' || f.tipo === 'usdt') && <div className="fila">
-        <Campo label={'Equivalencia USD por 1 ' + tipo.unidad} tipo="number" valor={f.usdPorUnidad}
+        <Campo label={'Equivalencia opcional: USD por 1 ' + tipo.unidad} tipo="number" valor={f.usdPorUnidad}
           onCambio={v => set('usdPorUnidad', v)} />
-        <p className="ayuda">Necesaria para cotizaciones expresadas en USD. Debes introducir la equivalencia de la operación; no se inventa.</p>
+        <p className="ayuda">Puedes registrar la referencia sin equivalencia. Para aplicarla a una operación base USD, sí habrá que indicar USD por unidad.</p>
       </div>}
       {f.tipo === 'menudeo' && <div className="fila">
         <Campo label="Banco / entidad" valor={f.entidad} onCambio={v => set('entidad', v)} />
