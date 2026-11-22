@@ -2,6 +2,7 @@ import Dexie from 'dexie'
 import { aplicarMovimiento, calcularCotizacion, consumoPedido, faltantesDeCosto, personas } from './lib/calc.js'
 import { prepararDuplicadoCotizacion } from './lib/escalas-cotizaciones.js'
 import { calcularArqueo, resumenMovimientosCaja } from './lib/caja.js'
+import { seleccionarTasa } from './lib/tasas-multiples.js'
 
 // Base de datos local (IndexedDB, dentro del navegador).
 // Toda la lógica de datos pasa por este archivo para poder migrar
@@ -110,13 +111,13 @@ export async function getConfig() {
   return (await db.config.get('general')) ?? CONFIG_INICIAL
 }
 
-export async function tasaVigente() {
-  return db.tasas.orderBy('fecha').last()
+export async function tasaVigente(tipo = 'bcv_usd', fechaMax = '9999-12-31') {
+  return seleccionarTasa(await db.tasas.toArray(), tipo, fechaMax)
 }
 
 // ---------- Inventario ----------
 
-export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen, tasa }) {
+export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen, tasa, tasaDetalle }) {
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     const p = await db.productos.get(productoId)
     if (!p) throw new Error('Producto no encontrado')
@@ -134,6 +135,7 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
       proveedorId: proveedorId ?? null,
       pagadoCon: pagadoCon ?? null,
       tasa: tasa == null ? null : Number(tasa),
+      tasaDetalle: tasaDetalle ? structuredClone(tasaDetalle) : null,
       origen: origen ?? null,
       stockResultante: r.stock,
       costoPromedioResultante: r.costoPromedio,
@@ -373,6 +375,7 @@ export async function crearPedidoDesdeCotizacion(cotId) {
       costoTotal: calc.costoTotal,
       ganancia: calc.ganancia,
       tasa: cot.tasa,
+      tasaDetalle: cot.tasaDetalle ? structuredClone(cot.tasaDetalle) : null,
       metodoPagoIdx: cot.metodoPagoIdx,
       abonos: [],
       inventarioDescontado: false,
@@ -458,12 +461,12 @@ export async function agregarDatos(datos) {
 
 // ---------- Compra de varios materiales ----------
 /** lineas: [{ productoId, cantidadUso, costoTotal }] con el delivery ya incluido en costoTotal. */
-export async function registrarCompra({ lineas, fecha, proveedorId, pagadoCon, referencia, nota, tasa }) {
+export async function registrarCompra({ lineas, fecha, proveedorId, pagadoCon, referencia, nota, tasa, tasaDetalle }) {
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     for (const l of lineas)
       await registrarMovimiento({
         productoId: l.productoId, tipo: 'entrada', cantidad: l.cantidadUso, costoUnitario: l.costoTotal / l.cantidadUso,
-        fecha, proveedorId, pagadoCon, referencia, nota, tasa,
+        fecha, proveedorId, pagadoCon, referencia, nota, tasa, tasaDetalle,
       })
   })
 }
