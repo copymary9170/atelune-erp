@@ -44,7 +44,8 @@ export function crearDetalleTasa({ tipo, tasa, usdPorUnidad, fecha, hora, entida
   if (requiereEquivalencia && !positivo(usdPorUnidad))
     throw new Error('Para EUR o USDT indica cuánto USD equivale a una unidad de esa moneda.')
   const usdUnidad = requiereEquivalencia ? Number(usdPorUnidad) : 1
-  const tasaEfectiva = Number(tasa) / usdUnidad
+  // Evitar residuos binarios como 240.00000000000003 al congelar la tasa.
+  const tasaEfectiva = Number((Number(tasa) / usdUnidad).toFixed(10))
   if (!Number.isFinite(tasaEfectiva) || tasaEfectiva <= 0)
     throw new Error('La conversión a Bs/USD no es válida.')
   const pct = Number(comisionPct || 0)
