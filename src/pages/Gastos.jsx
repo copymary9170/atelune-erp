@@ -157,6 +157,7 @@ export function GastoForm({ inicial, config, proveedores, onCerrar }) {
 
       </div>
       <TasaOperacion valor={g} fecha={g.fecha} montoUsd={g.monto}
+        opcional={!/efectivo\s*(?:bs|bol[ií]var(?:es)?)|pago\s*m[oó]vil/i.test(g.pagadoCon || '')}
         onCambio={cambios => setG(actual => ({ ...actual, ...cambios }))} />
       {g.tipo === 'gasto'
         ? <SelectorPago valor={g.pagadoCon ?? ''} onCambio={(v) => set('pagadoCon', v)} metodos={metodos} />
