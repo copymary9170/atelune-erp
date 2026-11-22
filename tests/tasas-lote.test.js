@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { crearFilaLote, prepararLoteTasas, analizarRespuestaBCV, analizarRespuestaBancos, TIPOS_LOTE, BANCOS_VENEZUELA } from '../src/lib/tasas-lote.js'
+import { crearFilaLote, prepararLoteTasas, analizarRespuestaBCV, analizarRespuestaBancos, TIPOS_LOTE, BANCOS_VENEZUELA, BANCOS_MENUDEO_PRINCIPALES, filasLoteIniciales } from '../src/lib/tasas-lote.js'
 
 test('lote de cinco tasas guarda todas las referencias distintas sin reemplazar días anteriores', () => {
   const filas = TIPOS_LOTE.map(crearFilaLote)
@@ -49,4 +49,18 @@ test('bancos solo ofrece referencias recientes sin inferir compra ni venta', () 
   assert.equal(r.length,1)
   assert.equal(r[0].entidad,'Mercantil')
   assert.equal(r[0].sentidoConocido,false)
+})
+
+test('menudeo presenta tres bancos habituales; Banplus está disponible pero es opcional', () => {
+  assert.deepEqual(BANCOS_MENUDEO_PRINCIPALES,
+    ['Mercantil', 'Banesco', 'Banco de Venezuela (BDV)'])
+  const iniciales = filasLoteIniciales()
+  assert.equal(iniciales.length, 7)
+  assert.deepEqual(iniciales.filter(f => f.tipo === 'menudeo').map(f => f.entidad),
+    BANCOS_MENUDEO_PRINCIPALES)
+  assert.ok(BANCOS_VENEZUELA.some(b => b.nombre === 'Banplus'))
+  assert.ok(!iniciales.some(f => f.entidad === 'Banplus'))
+  const lote = iniciales.filter(f => f.tipo === 'menudeo').map((f, i) =>
+    ({ ...f, tasa: 250 + i }))
+  assert.equal(prepararLoteTasas(lote, '2026-11-22').length, 3)
 })
