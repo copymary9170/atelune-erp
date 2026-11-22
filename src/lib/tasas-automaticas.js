@@ -8,12 +8,13 @@ export function validarReferenciaAutomatica(r, hoy) {
     throw new Error('Tipo de referencia no permitido')
   if (!numeroPositivo(r.bs_por_unidad) || Number(r.bs_por_unidad) > 1e10)
     throw new Error('Valor de referencia inválido')
-  if (!fechaIso(r.fecha_valor) || !fechaIso(hoy) || r.fecha_valor > hoy)
-    throw new Error('Fecha valor futura o inválida')
-  const antiguedad = Math.floor((Date.parse(hoy + 'T12:00:00Z') -
+  if (!fechaIso(r.fecha_valor) || !fechaIso(hoy))
+    throw new Error('Fecha valor inválida')
+  const deltaDias = Math.floor((Date.parse(hoy + 'T12:00:00Z') -
     Date.parse(r.fecha_valor + 'T12:00:00Z')) / 86400000)
-  if (!Number.isFinite(antiguedad) || antiguedad < 0 || antiguedad > 7)
-    throw new Error('Referencia externa demasiado antigua')
+  const maxFuturo = r.tipo === 'bcv_usd' || r.tipo === 'bcv_eur' ? 5 : 0
+  if (!Number.isFinite(deltaDias) || deltaDias < -maxFuturo || deltaDias > 7)
+    throw new Error('Referencia con vigencia futura excesiva o demasiado antigua')
   if (r.tipo === 'bcv_eur' && r.moneda !== 'EUR')
     throw new Error('BCV euro tiene que estar expresada en EUR')
   if (r.tipo === 'bcv_usd' && r.moneda !== 'USD')
