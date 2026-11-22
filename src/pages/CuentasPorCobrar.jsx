@@ -39,7 +39,7 @@ export default function CuentasPorCobrar() {
   const r = reporte?.resumen
 
   return (
-    <>
+    <div className="cxc-panel">
       <div className="encabezado">
         <div>
           <h1>Cuentas por cobrar</h1>
@@ -47,7 +47,7 @@ export default function CuentasPorCobrar() {
         </div>
         <Link className="boton sec" to="/pedidos">Ver pedidos</Link>
       </div>
-      <div className="tarjeta">
+      <div className="tarjeta cxc-filtros">
         <div className="fila">
           <Campo label="Fecha de referencia" tipo="date" valor={dia} onCambio={setDia} />
           <Campo label="Buscar cliente o pedido" valor={buscar} onCambio={setBuscar} placeholder="Cliente o número…" />
@@ -61,20 +61,20 @@ export default function CuentasPorCobrar() {
       </div>
 
       {r && <>
-        <div className="grid g4">
+        <div className="grid g4 cxc-resumen">
           <div className="tarjeta kpi"><div className="etiqueta">Pendiente total</div><div className="valor">{usd(r.totalPendiente)}</div></div>
           <div className="tarjeta kpi"><div className="etiqueta">Entrega prevista pasada</div><div className="valor">{usd(r.vencido)}</div><div className="desglose">{r.cantidadVencida} pedido(s)</div></div>
           <div className="tarjeta kpi"><div className="etiqueta">Entrega prevista futura</div><div className="valor">{usd(r.porVencer)}</div></div>
           <div className="tarjeta kpi"><div className="etiqueta">Sin fecha</div><div className="valor">{usd(r.sinFecha)}</div></div>
         </div>
-        <div className="tarjeta">
+        <div className="tarjeta cxc-notas">
           <p><strong>{r.cantidadPendiente}</strong> pedidos con saldo · <strong>{usd(r.porCobrarEntregado)}</strong> corresponde a pedidos ya entregados.</p>
           <p className="muted">Los importes están en USD. La fecha seleccionada compara la entrega prevista con el día indicado; no demuestra vencimiento legal de pago. Los abonos son actuales, por lo que este tablero no reconstruye saldos históricos.</p>
           {!!r.excesoAbonos && <p className="pendiente">Se detectaron {usd(r.excesoAbonos)} en abonos superiores al total de algunos pedidos. Revisa esos pagos: no se descuentan de otras deudas.</p>}
           {!!r.casosExcluidos && <div className="avisos"><strong>{r.casosExcluidos} pedido(s) excluido(s) por falta de importes confiables.</strong><ul>{reporte.avisos.map((a, i) => <li key={i}>{a}</li>)}</ul></div>}
           <p className="ayuda">Los pedidos cancelados quedan fuera del cálculo. Cualquier devolución de dinero debe revisarse por separado en el registro original.</p>
         </div>
-        <div className="tarjeta tabla-scroll">
+        <div className="tarjeta tabla-scroll cxc-tabla">
           <h2>Saldo pendiente por cliente</h2>
           <p className="muted">Agrupa por ficha de cliente cuando existe; si no, por nombre escrito en el pedido. Los pedidos anónimos se mantienen separados. No se compensan deudas entre clientes.</p>
           <table>
@@ -92,7 +92,7 @@ export default function CuentasPorCobrar() {
             </tbody>
           </table>
         </div>
-        <div className="tarjeta tabla-scroll">
+        <div className="tarjeta tabla-scroll cxc-tabla">
           <h2>Detalle de saldos pendientes</h2>
           <table>
             <thead><tr><th>Pedido</th><th>Cliente</th><th>Entrega prevista</th><th>Situación</th><th className="num">Total</th><th className="num">Cobrado</th><th className="num">Pendiente</th></tr></thead>
@@ -111,6 +111,6 @@ export default function CuentasPorCobrar() {
           </table>
         </div>
       </>}
-    </>
+    </div>
   )
 }
