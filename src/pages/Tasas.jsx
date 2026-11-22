@@ -10,7 +10,7 @@ import {
 } from '../lib/tasas-lote.js'
 
 const filasIniciales = () => TIPOS_LOTE.map(tipo => crearFilaLote(tipo))
-const identificadorFila = (f, i) => (f.tipo + '-' + (f.entidad || '') + '-' + (f.sentido || '') + '-' + i)
+const identificadorFila = (_f, i) => String(i)
 
 export default function Tasas() {
   const tasas = useLiveQuery(() => db.tasas.orderBy('fecha').reverse().toArray(), [], [])
