@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db.js'
 import { supabase } from '../nube.js'
+import { useTasasAutomaticas } from '../lib/use-tasas-automaticas.js'
 import { Campo, Selector } from '../components/ui.jsx'
 import { fecha, hoy, num } from '../lib/format.js'
 import { TIPOS_TASA, tipoTasaHistorica } from '../lib/tasas-multiples.js'
@@ -16,6 +17,7 @@ const identificadorFila = (_f, i) => String(i)
 
 export default function Tasas() {
   const tasas = useLiveQuery(() => db.tasas.orderBy('fecha').reverse().toArray(), [], [])
+  const {registros: tasasAutomaticas, error: errorAuto, cargando: cargandoAuto} = useTasasAutomaticas()
   const [fechaLote, setFechaLote] = useState(hoy())
   const [hora, setHora] = useState('')
   const [filas, setFilas] = useState(filasIniciales)
@@ -103,6 +105,22 @@ export default function Tasas() {
         <h1>Tasas de cambio</h1>
         <p>Registra todas las referencias juntas. Cada tasa conserva tipo, hora, banco y procedencia; no modifica cotizaciones anteriores.</p>
       </div>
+    </div>
+    <div className="tarjeta">
+      <h2>Referencias automáticas verificadas</h2>
+      <p className="ayuda">Historial independiente, de solo lectura. La tarea programada consulta las fuentes autorizadas y añade registros nuevos sin cambiar tasas antiguas, compras, abonos ni cotizaciones. Programada diariamente a las 23:00 UTC; requiere activar los secretos del servidor y crear la tabla de Supabase.</p>
+      {cargandoAuto ? <p className="ayuda">Consultando historial…</p>
+        : errorAuto ? <p className="pendiente">Automatización aún no disponible: {errorAuto}. Las tasas manuales siguen funcionando.</p>
+        : !tasasAutomaticas.length ? <p className="ayuda">Todavía no hay tasas automáticas guardadas. Revisa la configuración del cron y su última ejecución.</p>
+        : <div className="tabla-scroll"><table>
+          <thead><tr><th>Fecha valor</th><th>Referencia</th><th>Fuente</th><th>Bs por unidad</th><th>Banco / sentido</th></tr></thead>
+          <tbody>{tasasAutomaticas.slice(0,30).map(t => <tr key={t.id}>
+            <td>{t.fecha_valor}</td><td>{TIPOS_TASA[t.tipo]?.nombre || t.tipo}</td>
+            <td>{t.fuente}</td><td>{num(t.bs_por_unidad,4)} Bs/{t.moneda}</td>
+            <td>{[t.entidad,t.sentido].filter(Boolean).join(' · ') || '—'}</td>
+          </tr>)}</tbody>
+        </table></div>}
+      <p className="ayuda">La automatización solo incorpora referencias verificadas de proveedores habilitados. Las cotizaciones bancarias sin sentido compra/venta y las tasas de USDT o calle sin fuente válida no se registran con números supuestos.</p>
     </div>
     <div className="tarjeta">
       <h2>Consultar fuentes</h2>
