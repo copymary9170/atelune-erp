@@ -204,3 +204,7 @@ La sección **Tasas de cambio** permite registrar por fecha y hora varias refere
 - Los precios bancarios agregados no indican necesariamente el sentido **compra/venta** ni las comisiones finales: solo se muestran como referencias de consulta, con fuente y fecha. **No se copian automáticamente al libro ni a operaciones**. El usuario debe confirmar en el banco la oferta aplicable, la fecha y la comisión, y rellenar la fila de menudeo del banco correspondiente.
 - Páginas oficiales para consultar las condiciones: **BDV, Mercantil, Banesco, Banplus y BNC** enlazadas desde la pantalla. Esta funcionalidad **NO se conecta a la banca en línea ni lee cuentas, saldos, transacciones o credenciales**, no realiza operaciones bancarias y no utiliza capturas privadas.
 - Las consultas externas pueden fallar por conectividad, disponibilidad, restricciones CORS o API key, y deben indicar error sin generar tasas ficticias.
+
+### Bancos habituales para menudeo
+
+Las filas predeterminadas de menudeo son **Mercantil**, **Banesco** y **Banco de Venezuela (BDV)**, por ser las entidades principales utilizadas para esta actividad. **Banplus** permanece disponible en el selector **+ Otro banco / compra o venta**, pero no se añade automáticamente. No se presume que las tasas bancarias sean iguales entre entidades, ni que todos los bancos permitan operar en cualquier momento.
