@@ -79,6 +79,10 @@ export default function CotizacionEditor() {
 
   async function convertirEnPedido() {
     if (!c.items.length) return
+    if (/(?:\b(?:bs\.?|ves|bol[ií]var(?:es)?)\b|pago\s*m[oó]vil)/i.test(datos.config.metodosPago?.[c.metodoPagoIdx]?.nombre || '') && !(Number(c.tasa) > 0)) {
+      setAviso('Selecciona una tasa completa antes de convertir un pedido que se cobrará en bolívares.')
+      return
+    }
     if (escalasConError) { setAviso('Corrige los escalones por cantidad antes de crear el pedido.'); return }
     await db.cotizaciones.put({ ...c, calculo: resumenCalculo(r) })
     const aviso = faltantes.length
