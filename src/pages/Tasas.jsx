@@ -6,11 +6,12 @@ import { Campo, Selector } from '../components/ui.jsx'
 import { fecha, hoy, num } from '../lib/format.js'
 import { TIPOS_TASA, tipoTasaHistorica } from '../lib/tasas-multiples.js'
 import {
-  BANCOS_VENEZUELA, TIPOS_LOTE, crearFilaLote, prepararLoteTasas,
+  BANCOS_VENEZUELA, filasLoteIniciales, crearFilaLote, prepararLoteTasas,
   analizarRespuestaBCV, analizarRespuestaBancos,
 } from '../lib/tasas-lote.js'
 
-const filasIniciales = () => TIPOS_LOTE.map(tipo => crearFilaLote(tipo))
+const filasIniciales = filasLoteIniciales
+const CANTIDAD_FILAS_PREDETERMINADAS = filasLoteIniciales().length
 const identificadorFila = (_f, i) => String(i)
 
 export default function Tasas() {
@@ -132,7 +133,7 @@ export default function Tasas() {
         <Campo label="Fecha del registro" tipo="date" valor={fechaLote} onCambio={setFechaLote} />
         <Campo label="Hora (opcional, misma para el lote)" tipo="time" valor={hora} onCambio={setHora} />
       </div>
-      <p className="ayuda">Completa las que conozcas y deja las demás vacías. Se guardan todas las filas con tasa válida en una sola operación. Si hay una fila inválida, no se guarda ninguna. Los valores de referencia se pueden cambiar manualmente antes de confirmar.</p>
+      <p className="ayuda">Menudeo principal: Mercantil, Banesco y Banco de Venezuela. Banplus y otros bancos se pueden agregar opcionalmente. Completa las que conozcas y deja las demás vacías. Se guardan todas las filas con tasa válida en una sola operación. Si hay una fila inválida, no se guarda ninguna. Los valores de referencia se pueden cambiar manualmente antes de confirmar.</p>
       {filas.map((f,i) => <div className="subtabla" key={identificadorFila(f,i)}>
         <div className="fila">
           <div className="campo"><label>Referencia</label><strong>{TIPOS_TASA[f.tipo].nombre}</strong></div>
@@ -146,7 +147,7 @@ export default function Tasas() {
               opciones={[{value:'compra',label:'Compras divisas'},{value:'venta',label:'Vendes divisas'}]} />
             <Campo label="Comisión (%) informativa" tipo="number" valor={f.comisionPct} onCambio={v => cambiar(i,'comisionPct',v)} />
           </>}
-          {i >= TIPOS_LOTE.length && <div className="campo auto">
+          {i >= CANTIDAD_FILAS_PREDETERMINADAS && <div className="campo auto">
             <button type="button" className="sec mini" onClick={() => setFilas(prev => prev.filter((_,j) => j !== i))}>Quitar fila</button>
           </div>}
         </div>
