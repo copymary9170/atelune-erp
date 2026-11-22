@@ -235,6 +235,7 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
       )}
       {tipo === 'entrada' && <SelectorPago valor={pagadoCon} onCambio={setPagadoCon} metodos={config.metodosPago || []} />}
       {tipo === 'entrada' && <TasaOperacion valor={tasaMov} fecha={f} montoUsd={costoTotal}
+        opcional={!(monedaEfectivo(pagadoCon) === 'Bs' || /pago\s*m[oó]vil/i.test(pagadoCon))}
         onCambio={cambios => setTasaMov(actual => ({ ...actual, ...cambios }))} />}
       <Campo label="Referencia" valor={referencia} onCambio={setReferencia} placeholder="N.º de factura, nota de entrega…" />
       <Campo label="Nota" valor={nota} onCambio={setNota} />
