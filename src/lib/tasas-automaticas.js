@@ -55,3 +55,26 @@ export function elegirAutomaticas(registros) {
     return acc
   },new Map())
 }
+
+
+// La API de Referencias VE expone precio en Bs por USDT, pero su fecha valor
+// es el momento de publicación (createdAt), no la fecha efectiva BCV.
+// El campo fuente debe declarar BINANCE, sin inferir tasa "calle".
+export function interpretarUSDTReferenciasVE(datos, hoy) {
+  if (!Array.isArray(datos)) throw new Error('Referencias VE devolvió estructura inválida')
+  const elegibles = datos.filter(x => x?.type === 'CRYPTO' &&
+    x.currency === 'USDT' && x.source === 'BINANCE' &&
+    typeof x.createdAt === 'string' && !Number.isNaN(Date.parse(x.createdAt)))
+  if (!elegibles.length) return []
+  elegibles.sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt))
+  const r=elegibles[0], fecha=r.createdAt.slice(0,10)
+  if (Date.parse(r.createdAt)>Date.now()+60000)
+    throw new Error('Referencia USDT con fecha futura')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error('Fecha USDT inválida')
+  return [validarReferenciaAutomatica({
+    tipo:'usdt',moneda:'USDT',bs_por_unidad:r.price,
+    fuente:'Referencias VE · BINANCE',fecha_valor:fecha,
+    instante_fuente:r.createdAt,
+    url_fuente:'https://referenciasve.com/developers',
+  },hoy)]
+}
