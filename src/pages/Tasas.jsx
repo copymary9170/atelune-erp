@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import './tasas.css'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db.js'
 import { supabase } from '../nube.js'
@@ -24,6 +25,7 @@ export default function Tasas() {
   const [error, setError] = useState('')
   const [mensaje, setMensaje] = useState('')
   const [ocupado, setOcupado] = useState(false)
+  const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [sugerencias, setSugerencias] = useState([])
   const [origenBCV, setOrigenBCV] = useState('')
   const cambiar = (i, campo, valor) => setFilas(actual => actual.map((f,j) => i === j
@@ -32,6 +34,24 @@ export default function Tasas() {
     ? [...actual, crearFilaLote('menudeo')] : actual)
   const agregarPersonalizada = () => setFilas(actual => actual.length < 40
     ? [...actual, crearFilaLote('personalizada')] : actual)
+
+  // Tarjetas solo informativas: nunca alteran ni seleccionan tasas en operaciones.
+  const resumenTasas = [
+    { tipo: 'bcv_usd', titulo: 'Dólar BCV', unidad: 'USD' },
+    { tipo: 'bcv_eur', titulo: 'Euro BCV', unidad: 'EUR' },
+    { tipo: 'usdt', titulo: 'USDT', unidad: 'USDT' },
+    { tipo: 'calle', titulo: 'Calle / paralelo', unidad: 'USD' },
+  ].map(item => {
+    const automatica = tasasAutomaticas.find(t => t.tipo === item.tipo)
+    const manual = tasas.find(t => tipoTasaHistorica(t) === item.tipo)
+    const tasa = automatica?.bs_por_unidad ?? manual?.tasa
+    const referencia = automatica
+      ? { origen: 'Automática', detalle: (automatica.fecha_valor || 'Sin fecha') + ' · ' + automatica.fuente }
+      : manual
+        ? { origen: 'Manual / histórico', detalle: (manual.fecha || 'Sin fecha') + ' · ' + (manual.origen || 'Registro manual') }
+        : { origen: 'Sin referencias', detalle: 'No hay una tasa registrada para mostrar' }
+    return { ...item, tasa, ...referencia }
+  })
 
   async function consultarBCV() {
     setError(''); setMensaje(''); setOcupado(true)
@@ -99,20 +119,32 @@ export default function Tasas() {
     } finally { setOcupado(false) }
   }
 
-  return <>
-    <div className="encabezado">
+  return <div className="tasas-panel">
+    <header className="tasas-intro">
       <div>
         <h1>Tasas de cambio</h1>
-        <p>Registra todas las referencias juntas. Cada tasa conserva tipo, hora, banco y procedencia; no modifica cotizaciones anteriores.</p>
+        <p>Consulta las referencias con su fecha y procedencia, registra varias tasas a la vez y conserva intactos los valores de operaciones anteriores.</p>
       </div>
-    </div>
-    <div className="tarjeta">
-      <h2>Referencias automáticas verificadas</h2>
+      <span className="tasas-indicador">Historial protegido</span>
+    </header>
+    <section className="tasas-resumen" aria-label="Resumen de referencias de tasas">
+      {resumenTasas.map(item => <article className="tasas-cotizacion" key={item.tipo}>
+        <div className="tasas-cotizacion-titulo">{item.titulo}</div>
+        <div className="tasas-cotizacion-valor">
+          {item.tasa == null ? '—' : num(item.tasa, 4)} <small>Bs/{item.unidad}</small>
+        </div>
+        <div className="tasas-cotizacion-detalle">{item.detalle}</div>
+        <span className={'tasas-cotizacion-origen' + (item.origen === 'Automática' ? '' : ' manual')}>{item.origen}</span>
+      </article>)}
+    </section>
+    <div className="tasas-manual-nota">Las tarjetas son informativas: mostrar una referencia no la aplica a ventas, compras, cotizaciones o pagos. Los valores históricos permanecen independientes.</div>
+    <section className="tarjeta tasas-seccion" id="tasas-automaticas">
+      <div className="tasas-cabecera"><h2>Referencias automáticas verificadas</h2><span className="tasas-indicador">Solo lectura</span></div>
       <p className="ayuda">Historial independiente, de solo lectura. La tarea programada consulta las fuentes autorizadas y añade registros nuevos sin cambiar tasas antiguas, compras, abonos ni cotizaciones. Programada diariamente a las 23:00 UTC; requiere activar los secretos del servidor y crear la tabla de Supabase.</p>
       {cargandoAuto ? <p className="ayuda">Consultando historial…</p>
-        : errorAuto ? <p className="pendiente">Automatización aún no disponible: {errorAuto}. Las tasas manuales siguen funcionando.</p>
-        : !tasasAutomaticas.length ? <p className="ayuda">Todavía no hay tasas automáticas guardadas. Revisa la configuración del cron y su última ejecución.</p>
-        : <div className="tabla-scroll"><table>
+        : errorAuto ? <p role="alert" className="tasas-estado error">No se pudo consultar el historial automático: {errorAuto}. Puedes seguir registrando tasas manualmente.</p>
+        : !tasasAutomaticas.length ? <p className="tasas-estado">Todavía no hay referencias automáticas guardadas. Vercel Cron está configurado, pero el registro efectivo debe verificarse en Supabase.</p>
+        : <div className="tabla-scroll tasas-tabla-scroll"><table>
           <thead><tr><th>Fecha valor</th><th>Referencia</th><th>Fuente</th><th>Bs por unidad</th><th>Banco / sentido</th></tr></thead>
           <tbody>{tasasAutomaticas.slice(0,30).map(t => <tr key={t.id}>
             <td>{t.fecha_valor}</td><td>{TIPOS_TASA[t.tipo]?.nombre || t.tipo}</td>
@@ -121,10 +153,10 @@ export default function Tasas() {
           </tr>)}</tbody>
         </table></div>}
       <p className="ayuda">La automatización solo incorpora referencias verificadas de proveedores habilitados. Las cotizaciones bancarias sin sentido compra/venta y las tasas de USDT o calle sin fuente válida no se registran con números supuestos.</p>
-    </div>
-    <div className="tarjeta">
-      <h2>Consultar fuentes</h2>
-      <div className="fila">
+    </section>
+    <section className="tarjeta tasas-seccion" id="tasas-fuentes">
+      <div className="tasas-cabecera"><h2>Consultar fuentes</h2><span className="tasas-indicador">Consulta, no guardado</span></div>
+      <div className="fila tasas-acciones">
         <div className="campo auto"><button type="button" className="sec" disabled={ocupado} onClick={consultarBCV}>Consultar BCV dólar y euro</button></div>
         <div className="campo auto"><button type="button" className="sec" disabled={ocupado} onClick={consultarBancos}>Consultar referencias de bancos</button></div>
         <div className="campo auto"><a href="https://www.bcv.org.ve/" target="_blank" rel="noopener noreferrer">Comprobar en BCV oficial</a></div>
@@ -143,16 +175,22 @@ export default function Tasas() {
         <div className="tabla-scroll"><table><thead><tr><th>Entidad</th><th>Tasa publicada Bs/USD</th><th>Fecha publicada</th></tr></thead>
           <tbody>{sugerencias.map((x,i) => <tr key={i}><td>{x.entidad}</td><td>{num(x.tasa,4)}</td><td>{x.fecha}</td></tr>)}</tbody></table></div>
       </div>}
-    </div>
+    </section>
 
-    <form className="tarjeta" onSubmit={guardarLote}>
-      <h2>Cargar todas las tasas</h2>
+    <section className="tarjeta tasas-seccion" id="tasas-manuales">
+      <div className="tasas-cabecera">
+        <h2>Registrar tasas manualmente</h2>
+        <button type="button" className="sec tasas-toggle" aria-expanded={mostrarFormulario} aria-controls="tasas-formulario" onClick={() => setMostrarFormulario(x => !x)}>{mostrarFormulario ? 'Ocultar formulario' : 'Registrar varias tasas'}</button>
+      </div>
+      <p className="tasas-subtitulo">Carga dólar, euro, USDT, calle y menudeo por banco en una sola operación. Solo se guardan las filas que completes.</p>
+      {mostrarFormulario && <form id="tasas-formulario" onSubmit={guardarLote}>
+      <h3>Nuevo lote de tasas</h3>
       <div className="fila">
         <Campo label="Fecha del registro" tipo="date" valor={fechaLote} onCambio={setFechaLote} />
         <Campo label="Hora (opcional, misma para el lote)" tipo="time" valor={hora} onCambio={setHora} />
       </div>
       <p className="ayuda">Menudeo principal: Mercantil, Banesco y Banco de Venezuela. Banplus y otros bancos se pueden agregar opcionalmente. Completa las que conozcas y deja las demás vacías. Se guardan todas las filas con tasa válida en una sola operación. Si hay una fila inválida, no se guarda ninguna. Los valores de referencia se pueden cambiar manualmente antes de confirmar.</p>
-      {filas.map((f,i) => <div className="subtabla" key={identificadorFila(f,i)}>
+      {filas.map((f,i) => <div className="subtabla tasas-fila-lote" key={identificadorFila(f,i)}>
         <div className="fila">
           <div className="campo"><label>Referencia</label><strong>{TIPOS_TASA[f.tipo].nombre}</strong></div>
           <Campo label={'Bs por 1 ' + TIPOS_TASA[f.tipo].unidad} tipo="number" valor={f.tasa} onCambio={v => cambiar(i,'tasa',v)} />
@@ -179,10 +217,12 @@ export default function Tasas() {
       <p className="ayuda">Menudeo: se guarda por banco y por sentido. Las comisiones se registran como información y no se aplican dos veces. La consulta de tasas no accede a cuentas bancarias ni realiza pagos.</p>
       {error && <p role="alert" className="pendiente">{error}</p>}
       {mensaje && <p role="status" className="ayuda">{mensaje}</p>}
-    </form>
-    <div className="tarjeta tabla-scroll">
-      <h2>Historial de tasas</h2>
-      <table>
+      </form>}
+    </section>
+    <section className="tarjeta tasas-seccion">
+      <div className="tasas-cabecera"><h2>Historial de tasas manuales</h2><span className="tasas-indicador">{tasas.length} registros</span></div>
+      <p className="tasas-subtitulo">Movimientos registrados en el libro personal. Las referencias automáticas se consultan en el panel superior.</p>
+      <div className="tabla-scroll tasas-tabla-scroll"><table>
         <thead><tr><th>Fecha</th><th>Hora</th><th>Tipo / fuente</th><th className="num">Bs por unidad</th><th>Equiv. USD</th><th>Banco / sentido</th><th>Procedencia</th></tr></thead>
         <tbody>{tasas.map(t => {
           const identificada = tipoTasaHistorica(t)
@@ -194,9 +234,9 @@ export default function Tasas() {
             <td>{t.origen || 'Manual / histórico'}</td>
           </tr>
         })}
-        {!tasas.length && <tr><td colSpan={7} className="vacio">Aún no hay tasas cargadas.</td></tr>}
+        {!tasas.length && <tr><td colSpan={7} className="vacio">Aún no hay tasas manuales cargadas.</td></tr>}
         </tbody>
-      </table>
-    </div>
-  </>
+      </table></div>
+    </section>
+  </div>
 }
