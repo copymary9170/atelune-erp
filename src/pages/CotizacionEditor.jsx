@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, tasaVigente, crearPedidoDesdeCotizacion, codigoPedido, duplicarCotizacion } from '../db.js'
+import { db, crearPedidoDesdeCotizacion, codigoPedido, duplicarCotizacion } from '../db.js'
 import { escalasInvalidas } from '../lib/escalas-cotizaciones.js'
 import { Avisos, Campo, Selector } from '../components/ui.jsx'
 import ItemEditor, { itemVacio } from '../components/ItemEditor.jsx'
 import ComparadorCantidades from '../components/ComparadorCantidades.jsx'
+import TasaOperacion from '../components/TasaOperacion.jsx'
 import { useDatosCalculo } from './Plantillas.jsx'
 import { ESTADOS, codigo } from './Cotizaciones.jsx'
 import { calcularCotizacion, avisosCotizacion, faltantesDeCosto } from '../lib/calc.js'
@@ -104,12 +105,6 @@ export default function CotizacionEditor() {
     setC((x) => ({ ...x, clienteId: cid }))
   }
 
-  async function usarTasaDelDia() {
-    const t = await tasaVigente()
-    if (!t) return alert('No hay tasas cargadas. Ve a «Tasa de cambio».')
-    set('tasa', t.tasa)
-  }
-
   return (
     <>
       <div className="encabezado">
@@ -202,10 +197,8 @@ export default function CotizacionEditor() {
             <Selector label="Método de pago" valor={c.metodoPagoIdx} onCambio={(v) => set('metodoPagoIdx', Number(v))}
               opciones={metodos.map((m, i) => ({ value: i, label: m.nombre + (m.comisionPct ? ` (+${m.comisionPct} %)` : '') }))} />
           </div>
-          <div className="fila">
-            <Campo label="Tasa Bs/$ de esta cotización" tipo="number" valor={c.tasa} onCambio={(v) => set('tasa', v)} />
-            <div className="campo auto"><button className="sec" onClick={usarTasaDelDia}>Usar la del día</button></div>
-          </div>
+          <TasaOperacion valor={c} fecha={c.fecha} montoUsd={r.total}
+            onCambio={cambios => setC(actual => ({ ...actual, ...cambios }))} />
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--texto)' }}>
             <input type="checkbox" style={{ width: 'auto' }} checked={!!c.aplicarIva} onChange={(e) => set('aplicarIva', e.target.checked)} />
             Aplicar IVA {datos.config.ivaPct != null ? `(${datos.config.ivaPct} %)` : <span className="pendiente">(falta el % en Configuración)</span>}
@@ -223,7 +216,7 @@ export default function CotizacionEditor() {
               {r.comision > 0 && <tr><td>Comisión método de pago</td><td className="num">{usd(r.comision)}</td></tr>}
               {r.iva > 0 && <tr><td>IVA</td><td className="num">{usd(r.iva)}</td></tr>}
               <tr className="total"><td>Total</td><td className="num">{usd(r.total)}</td></tr>
-              <tr><td>Total en bolívares</td><td className="num">{r.totalBs != null ? bs(r.totalBs) : <span className="pendiente">falta tasa</span>}</td></tr>
+              <tr><td>Total en bolívares {c.tasaDetalle?.tipo ? '(' + c.tasaDetalle.tipo + ')' : ''}</td><td className="num">{r.totalBs != null ? bs(r.totalBs) : <span className="pendiente">falta tasa</span>}</td></tr>
             </tbody>
           </table>
           <hr style={{ border: 0, borderTop: '1px solid var(--linea)', margin: '14px 0' }} />
