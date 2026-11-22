@@ -94,7 +94,9 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
         {montoUsd != null && Number.isFinite(Number(montoUsd)) ? ' Equivalente: ' + bs(Number(valor.tasa) * Number(montoUsd)) : ''}
         {tipo === 'legado' ? ' Registro antiguo: la fuente no está identificada. Selecciona un tipo para registrar otra tasa; el valor histórico se conserva mientras tanto.' : ''}
       </p>
-      : <p className="pendiente">Falta una tasa válida para calcular el equivalente en Bs. La operación en USD no se convierte automáticamente.</p>}
+      : <p className={opcional ? 'ayuda' : 'pendiente'}>{opcional
+        ? 'Sin tasa Bs aplicada. Puedes dejarla vacía si esta operación es exclusivamente en USD.'
+        : 'Falta una tasa válida para registrar esta operación en Bs.'}</p>}
     {!opcional && !(Number(valor.tasa) > 0) && <p className="pendiente">Necesitas registrar una tasa válida para esta operación en Bs.</p>}
   </div>
 }
