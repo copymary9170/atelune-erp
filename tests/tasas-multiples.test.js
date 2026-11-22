@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   TIPOS_TASA, tasaEsValida, tipoTasaHistorica, crearDetalleTasa,
-  seleccionarTasa, convertirUsdABs,
+  seleccionarTasa, convertirUsdABs, crearRegistroTasa,
 } from '../src/lib/tasas-multiples.js'
 
 test('cinco tasas coexisten el mismo día sin mezclarse', () => {
@@ -90,4 +90,23 @@ test('snapshot de una operación no cambia aunque el listado de cotizaciones pos
   assert.equal(convertirUsdABs(10,original),2400)
   assert.equal(convertirUsdABs(10,nuevo),2600)
   assert.equal(convertirUsdABs(10,original),2400)
+})
+
+test('registra cinco referencias el mismo día y permite euro sin equivalencia USD', () => {
+  const euro = crearRegistroTasa({fecha:'2026-11-22',tipo:'bcv_eur',tasa:287})
+  const usdt = crearRegistroTasa({fecha:'2026-11-22',tipo:'usdt',tasa:291})
+  assert.equal(euro.tasa,287)
+  assert.equal(euro.usdPorUnidad,null)
+  assert.equal(usdt.usdPorUnidad,null)
+  assert.throws(()=>crearDetalleTasa(euro),/USD/)
+  assert.equal(crearDetalleTasa({...euro,usdPorUnidad:1.15}).efectivaBsPorUsd,
+    Number((287/1.15).toFixed(10)))
+  assert.equal(crearRegistroTasa({fecha:'2026-11-22',tipo:'bcv_usd',tasa:265}).usdPorUnidad,1)
+})
+
+test('rechaza tasas, fechas y entidad bancaria inválidas al crear referencias', () => {
+  assert.throws(()=>crearRegistroTasa({fecha:'2026-02-30',tipo:'bcv_usd',tasa:250}),/Fecha/)
+  assert.throws(()=>crearRegistroTasa({fecha:'2026-11-22',tipo:'usdt',tasa:-1}),/positiva/)
+  assert.throws(()=>crearRegistroTasa({fecha:'2026-11-22',tipo:'menudeo',tasa:260}),/Menudeo/)
+  assert.throws(()=>crearRegistroTasa({fecha:'2026-11-22',tipo:'usdt',tasa:250,usdPorUnidad:0}),/Equivalencia/)
 })
