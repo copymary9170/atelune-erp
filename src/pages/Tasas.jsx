@@ -140,7 +140,7 @@ export default function Tasas() {
     <div className="tasas-manual-nota">Las tarjetas son informativas: mostrar una referencia no la aplica a ventas, compras, cotizaciones o pagos. Los valores históricos permanecen independientes.</div>
     <section className="tarjeta tasas-seccion" id="tasas-automaticas">
       <div className="tasas-cabecera"><h2>Referencias automáticas verificadas</h2><span className="tasas-indicador">Solo lectura</span></div>
-      <p className="ayuda">Historial independiente, de solo lectura. La tarea programada consulta las fuentes autorizadas y añade registros nuevos sin cambiar tasas antiguas, compras, abonos ni cotizaciones. Programada diariamente a las 23:00 UTC; requiere activar los secretos del servidor y crear la tabla de Supabase.</p>
+      <p className="ayuda">Historial independiente, de solo lectura. La tarea programada consulta las fuentes autorizadas y añade registros nuevos sin cambiar tasas antiguas, compras, abonos ni cotizaciones. Programada diariamente a las 22:00 UTC (6:00 p. m. de Venezuela); en el plan Hobby de Vercel puede ejecutarse durante la hora siguiente. Conserva la fecha valor publicada por cada fuente.</p>
       {cargandoAuto ? <p className="ayuda">Consultando historial…</p>
         : errorAuto ? <p role="alert" className="tasas-estado error">No se pudo consultar el historial automático: {errorAuto}. Puedes seguir registrando tasas manualmente.</p>
         : !tasasAutomaticas.length ? <p className="tasas-estado">Todavía no hay referencias automáticas guardadas. Vercel Cron está configurado, pero el registro efectivo debe verificarse en Supabase.</p>
