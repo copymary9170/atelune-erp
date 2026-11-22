@@ -237,6 +237,7 @@ function AbonoForm({ pedido, saldo, metodos, onCerrar }) {
         <Selector label="Método" valor={a.metodo} onCambio={(v) => set('metodo', v)} opciones={metodos.map((m) => ({ value: m.nombre, label: m.nombre }))} />
       </div>
       <TasaOperacion valor={a} fecha={a.fecha} montoUsd={a.monto}
+        opcional={!/efectivo\s*(?:bs|bol[ií]var(?:es)?)|pago\s*m[oó]vil/i.test(a.metodo || '')}
         onCambio={cambios => setA(actual => ({ ...actual, ...cambios }))} />
       {n(a.tasa) > 0 && n(a.monto) > 0 && <p className="ayuda">= {bs(n(a.monto) * n(a.tasa))}</p>}
       <Campo label="Nota" valor={a.nota} onCambio={(v) => set('nota', v)} placeholder="N.º de referencia, abono inicial…" />
