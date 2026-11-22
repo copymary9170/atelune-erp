@@ -6,6 +6,7 @@ import { CATEGORIAS_GASTO } from '../lib/contabilidad.js'
 import TasaOperacion from '../components/TasaOperacion.jsx'
 import { n, personas } from '../lib/calc.js'
 import { usd, bs, fecha, hoy } from '../lib/format.js'
+import { TIPOS_TASA } from '../lib/tasas-multiples.js'
 
 export const TIPOS_GASTO = {
   gasto: 'Gasto del negocio',
@@ -87,7 +88,7 @@ export default function Gastos() {
                 <td><span className="etiqueta-tipo">{TIPOS_GASTO[g.tipo]}</span></td>
                 <td>{g.tipo === 'gasto' && <strong>{g.categoria}</strong>}{g.personaNombre && <strong>{g.personaNombre}</strong>} {g.descripcion}{g.proveedorId ? <div className="desglose">{nombreProv(g.proveedorId)}</div> : null}</td>
                 <td>{g.pagadoCon === 'credito' ? <span className="pendiente">a crédito</span> : g.pagadoCon || 'aporte propio'}</td>
-                <td className="num">{usd(g.monto)}{n(g.tasa) > 0 && <div className="desglose">{bs(n(g.monto) * n(g.tasa))}</div>}</td>
+                <td className="num">{usd(g.monto)}{n(g.tasa) > 0 && <div className="desglose">{bs(n(g.monto) * n(g.tasa))}{g.tasaDetalle?.tipo ? ' · ' + (TIPOS_TASA[g.tasaDetalle.tipo]?.nombre || g.tasaDetalle.tipo) : ' · tasa histórica'}</div>}</td>
               </tr>
             ))}
             {!delMes.length && <tr><td colSpan={5} className="vacio">No hay registros en este período.</td></tr>}
