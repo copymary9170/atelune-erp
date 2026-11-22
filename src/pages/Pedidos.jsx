@@ -12,6 +12,7 @@ import TasaOperacion from '../components/TasaOperacion.jsx'
 import ConsumoMateriales from '../components/ConsumoMateriales.jsx'
 import { consumoPedido, saldoPedido, totalAbonos, n } from '../lib/calc.js'
 import { usd, bs, num, fecha, hoy } from '../lib/format.js'
+import { TIPOS_TASA } from '../lib/tasas-multiples.js'
 
 const FLUJO = ['aprobado', 'en_diseno', 'en_produccion', 'listo', 'entregado']
 const claseEstado = (e) => (e === 'entregado' ? ' ok' : e === 'cancelado' ? ' bajo' : ['en_diseno', 'en_produccion'].includes(e) ? ' proceso' : ' neutro')
@@ -180,7 +181,7 @@ export function PedidoDetalle() {
               {(p.abonos || []).map((a, i) => (
                 <tr key={i}>
                   <td>{fecha(a.fecha)}{a.anulado && <span className="etiqueta-tipo bajo">Anulado</span>}<div className="desglose">{a.metodo}{a.nota && ' · ' + a.nota}{a.anulado && a.motivoAnulacion && ' · Motivo: ' + a.motivoAnulacion}</div></td>
-                  <td className="num">{a.anulado ? <s>{usd(a.monto)}</s> : usd(a.monto)}{a.tasa ? <div className="desglose">{bs(n(a.monto) * n(a.tasa))}</div> : null}</td>
+                  <td className="num">{a.anulado ? <s>{usd(a.monto)}</s> : usd(a.monto)}{a.tasa ? <div className="desglose">{bs(n(a.monto) * n(a.tasa))}{a.tasaDetalle?.tipo ? ' · ' + (TIPOS_TASA[a.tasaDetalle.tipo]?.nombre || a.tasaDetalle.tipo) : ' · tasa histórica'}</div> : null}</td>
                   <td className="num">{!a.anulado && <button className="peligro mini" onClick={async () => { const motivo = prompt('Motivo de anulación del pago:'); if (!motivo?.trim()) return; await db.transaction('rw',db.pedidos,async () => { const actual = await db.pedidos.get(p.id); const abonos = [...(actual.abonos || [])]; if (abonos[i]?.anulado) return; abonos[i] = {...abonos[i], anulado:true, motivoAnulacion:motivo.trim().slice(0,300), fechaAnulacion:new Date().toISOString()}; await db.pedidos.update(p.id,{abonos}) }) }}>Anular</button>}</td>
                 </tr>
               ))}
