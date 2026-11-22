@@ -223,7 +223,7 @@ Estado: **preparado en rama de revisión; no activo hasta instalar la migración
 
 ### Periodicidad, validaciones y alcance
 
-- El cron de `vercel.json` se ejecuta diariamente a las 23:00 UTC (19:00 Venezuela). GET `/api/cron-tasas` requiere `Authorization: Bearer CRON_SECRET`.
+- El cron de `vercel.json` está programado diariamente a las 22:00 UTC (18:00 Venezuela). En Vercel Hobby la ejecución puede ocurrir dentro de la hora siguiente, por lo que no se garantiza ejecución exacta a las 18:00. GET `/api/cron-tasas` requiere `Authorization: Bearer CRON_SECRET`.
 - BCV USD y EUR: `https://bcv.today/api/v1/rate.json`, fuente secundaria con fecha valor. Si la tasa está anunciada para el siguiente día hábil, se guarda para esa vigencia pero no se aplica anticipadamente a otra operación.
 - USDT Binance: opcional con `REFERENCIASVE_API_KEY` para `/rates/latest`. Requiere tipo CRYPTO, moneda USDT, fuente BINANCE y fecha publicada. Al aplicar referencias a montos USD, EUR y USDT exigen ingresar la equivalencia. Solo se ofrece USDT en su fecha de publicación en Caracas.
 - Menudeo: opcional con plan API Basic (o superior) de Referencias VE para `/rates/banks`. Mercantil, Banesco, Banco de Venezuela y Banplus (opcional). Las tasas recientes se guardan solo como `sentido=referencia`, no como el precio efectivo de compra o venta cuando el proveedor no publica esa distinción.
