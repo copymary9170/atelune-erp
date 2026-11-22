@@ -2,22 +2,20 @@ import { useId } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, CONFIG_INICIAL } from '../db.js'
 
-// Logo de Atelune: una luna creciente sobre un cuadro violeta, con los tres puntos de la impresión (cian, magenta, amarillo).
+// Logo de Atelune: una luna creciente y detalles dorados sobre azul noche.
 export function Logo({ size = 34 }) {
   const g = 'atelune-g' + useId().replace(/\W/g, '')
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" fill="none">
       <defs>
         <linearGradient id={g} x1="6" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#6a4bff" />
-          <stop offset="1" stopColor="#b24ad8" />
+          <stop stopColor="#10213b" />
+          <stop offset="1" stopColor="#294766" />
         </linearGradient>
       </defs>
       <rect width="64" height="64" rx="18" fill={`url(#${g})`} />
       <path d="M38 12a21 21 0 1 0 13 33A17.5 17.5 0 1 1 38 12z" fill="#fff" />
-      <circle cx="44" cy="22" r="3.4" fill="#0fb5d9" />
-      <circle cx="49.5" cy="31" r="3.4" fill="#ee3f95" />
-      <circle cx="42" cy="41" r="3.4" fill="#f7b500" />
+      <path d="M46 18l1.7 5.5L53 25l-5.3 1.5L46 32l-1.7-5.5L39 25l5.3-1.5z" fill="#d7b473" />
     </svg>
   )
 }
