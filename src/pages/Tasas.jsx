@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db.js'
+import { supabase } from '../nube.js'
 import { Campo, Selector } from '../components/ui.jsx'
 import { fecha, hoy, num } from '../lib/format.js'
 import { TIPOS_TASA, tipoTasaHistorica } from '../lib/tasas-multiples.js'
@@ -48,7 +49,13 @@ export default function Tasas() {
   async function consultarBancos() {
     setError(''); setMensaje(''); setOcupado(true)
     try {
-      const resp = await fetch('/api/tasas-bancos', { cache: 'no-store' })
+      if (!supabase) throw new Error('Primero conecta Atelune a Supabase para consultar la API bancaria.')
+      const { data } = await supabase.auth.getSession()
+      const token = data?.session?.access_token
+      if (!token) throw new Error('Inicia sesión para consultar referencias bancarias.')
+      const resp = await fetch('/api/tasas-bancos', {
+        cache: 'no-store', headers: { Authorization: 'Bearer ' + token },
+      })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error || 'Conexión bancaria no disponible.')
       const filasBanco = analizarRespuestaBancos(data.datos, fechaLote)
