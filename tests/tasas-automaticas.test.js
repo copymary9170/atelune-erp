@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { interpretarBCV, interpretarUSDTReferenciasVE, elegirAutomaticas } from '../src/lib/tasas-automaticas.js'
+import { interpretarBCV, interpretarUSDTReferenciasVE, interpretarBancosReferenciasVE, elegirAutomaticas } from '../src/lib/tasas-automaticas.js'
 import cron from '../api/cron-tasas.js'
 
 const r=()=>({statusCode:null,body:null,headers:{},setHeader(k,v){this.headers[k]=v},
@@ -83,4 +83,24 @@ test('USDT solo acepta referencia BINANCE con timestamp y par validado',()=>{
     {type:'CRYPTO',currency:'USDT',source:'BINANCE',price:0,
       createdAt:'2026-11-21T13:00:00.000Z'},
   ],'2026-11-22'),/Valor/)
+})
+
+test('bancos guardan solo referencia sin asumir compra/venta y no usan tasas caducadas',()=>{
+  const t=[
+    {type:'BANK',currency:'USD',entityName:'Banco Mercantil',price:'280',
+      createdAt:'2026-11-21T13:00:00.000Z'},
+    {type:'BANK',currency:'USD',entityName:'Banesco',price:'285',
+      createdAt:'2026-11-20T13:00:00.000Z'},
+    {type:'BANK',currency:'USD',entityName:'Banco de Venezuela',price:'275',
+      createdAt:'2026-11-21T13:00:00.000Z'},
+    {type:'BANK',currency:'USD',entityName:'Banplus',price:'295',
+      createdAt:'2026-10-20T13:00:00.000Z'},
+    {type:'FIAT',currency:'USD',entityName:'Mercantil',price:'999',
+      createdAt:'2026-11-22T13:00:00.000Z'},
+  ]
+  const x=interpretarBancosReferenciasVE(t,'2026-11-22')
+  assert.equal(x.length,3)
+  assert.deepEqual(x.map(r=>r.entidad),['Mercantil','Banesco','Banco de Venezuela (BDV)'])
+  assert.ok(x.every(r=>r.sentido==='referencia' && r.moneda==='USD'))
+  assert.equal(x.find(r=>r.entidad==='Mercantil').bs_por_unidad,280)
 })
