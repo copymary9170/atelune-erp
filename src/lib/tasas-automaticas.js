@@ -22,7 +22,7 @@ export function validarReferenciaAutomatica(r, hoy) {
   if (r.tipo === 'usdt' && r.moneda !== 'USDT')
     throw new Error('La referencia USDT debe estar en USDT')
   if (r.tipo === 'menudeo' && (!r.entidad ||
-    !['compra','venta'].includes(r.sentido)))
+    !['compra','venta','referencia'].includes(r.sentido)))
     throw new Error('Menudeo sin banco o sin sentido compra/venta verificable')
   if (!/^https:\/\//.test(r.url_fuente || '')) throw new Error('Fuente sin URL HTTPS')
   return Object.freeze({
@@ -78,4 +78,44 @@ export function interpretarUSDTReferenciasVE(datos, hoy) {
     instante_fuente:r.createdAt,
     url_fuente:'https://referenciasve.com/developers',
   },hoy)]
+}
+
+
+// Un precio bancario publicado SIN sentido no es una tasa real de menudeo
+// comprada/vendida. Se conserva solo como referencia informativa, sin poder
+// aplicarlo como "compra" o "venta" a los pedidos.
+export function interpretarBancosReferenciasVE(datos, hoy) {
+  if (!Array.isArray(datos)) throw new Error('Referencias bancarias sin lista')
+  const bancos=[
+    ['Mercantil',/\bmercantil\b/i],
+    ['Banesco',/\bbanesco\b/i],
+    ['Banco de Venezuela (BDV)',/banco\s+de\s+venezuela|\bbdv\b/i],
+    ['Banplus',/\bbanplus\b/i],
+  ]
+  const elegidos=[]
+  for (const [entidad,patron] of bancos) {
+    const disponibles=datos.filter(r => r?.type==='BANK' && r.currency==='USD' &&
+      patron.test(String(r.entityName||'')) &&
+      typeof r.createdAt==='string' && Number.isFinite(Date.parse(r.createdAt)))
+    disponibles.sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt))
+    const dato=disponibles[0]
+    if (!dato) continue
+    if (Date.parse(dato.createdAt)>Date.now()+60000) continue
+    try {
+      const r=validarReferenciaAutomatica({
+        tipo:'menudeo',fuente:'Referencias VE · EXCHANGE_MONITOR',
+        entidad,sentido:'referencia',moneda:'USD',
+        bs_por_unidad:dato.price,fecha_valor:dato.createdAt.slice(0,10),
+        instante_fuente:dato.createdAt,
+        url_fuente:'https://referenciasve.com/developers',
+      },hoy)
+      // Solo datos recientes; una tasa antigua no se anuncia como vigente.
+      const dias=(Date.parse(hoy+'T12:00:00Z')-
+        Date.parse(r.fecha_valor+'T12:00:00Z'))/86400000
+      if (dias>=0 && dias<=3) elegidos.push(r)
+    } catch {
+      // Descartar cifras sin validar, fecha vencida o malformadas.
+    }
+  }
+  return elegidos
 }
