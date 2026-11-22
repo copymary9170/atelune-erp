@@ -198,6 +198,7 @@ export default function CotizacionEditor() {
               opciones={metodos.map((m, i) => ({ value: i, label: m.nombre + (m.comisionPct ? ` (+${m.comisionPct} %)` : '') }))} />
           </div>
           <TasaOperacion valor={c} fecha={c.fecha} montoUsd={r.total}
+            opcional={!/efectivo\s*(?:bs|bol[ií]var(?:es)?)|pago\s*m[oó]vil/i.test(metodos[c.metodoPagoIdx]?.nombre || '')}
             onCambio={cambios => setC(actual => ({ ...actual, ...cambios }))} />
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--texto)' }}>
             <input type="checkbox" style={{ width: 'auto' }} checked={!!c.aplicarIva} onChange={(e) => set('aplicarIva', e.target.checked)} />
