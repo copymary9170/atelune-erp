@@ -38,25 +38,30 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
   }
   function usarRegistrada() {
     if (!tasaRegistrada) return
-    let detalle
+    const elegidos = {
+      tasa: tasaRegistrada.tasa,
+      usdPorUnidad: tasaRegistrada.usdPorUnidad ?? '',
+      entidad: tasaRegistrada.entidad || '',
+      sentido: tasaRegistrada.sentido || 'compra',
+      comisionPct: tasaRegistrada.comisionPct ?? 0,
+    }
     try {
-      detalle = crearDetalleTasa({
-        tipo,
-        tasa: tasaRegistrada.tasa,
-        usdPorUnidad: tasaRegistrada.usdPorUnidad,
+      const detalle = crearDetalleTasa({
+        tipo, ...elegidos,
         fecha: tasaRegistrada.fecha,
         hora: tasaRegistrada.hora,
-        entidad: tasaRegistrada.entidad,
-        sentido: tasaRegistrada.sentido,
-        comisionPct: tasaRegistrada.comisionPct,
         referenciaId: tasaRegistrada.id,
       })
-    } catch (e) {
-      return alert(e.message)
+      onCambio({ tipoTasa: tipo, tasa: detalle.efectivaBsPorUsd,
+        tasaDetalle: detalle, tasaBorrador: {} })
+    } catch {
+      // Si la referencia EUR/USDT aún no tiene equivalencia USD, copiar
+      // la tasa observada y pedir que se complete SIN inventar una paridad.
+      onCambio({ tipoTasa: tipo, tasa: null, tasaDetalle: null,
+        tasaBorrador: elegidos })
     }
-    onCambio({ tipoTasa: tipo, tasa: detalle.efectivaBsPorUsd,
-      tasaDetalle: detalle, tasaBorrador: {} })
   }
+
   return <div className="subtabla">
     <div className="fila">
       <Selector label="Tipo de tasa utilizada" valor={tipo} onCambio={actualizarTipo}
