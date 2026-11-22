@@ -195,3 +195,16 @@ La sección **Tasas de cambio** permite registrar por fecha y hora varias refere
 - La tabla `tasas` sigue usando el mismo esquema IndexedDB; se añaden campos opcionales y nuevas filas, sin transformar las anteriores. Las copias de seguridad siguen incluyendo esta tabla y las operaciones con sus metadatos.
 
 **Antes de utilizar con datos reales:** descarga un respaldo, prueba cada tipo con cantidades ficticias, confirma los métodos en Bs, comprueba la sincronización de dos sesiones y revisa que el costo en USD de compras pagadas en Bs refleje el equivalente realmente pagado. No utilizar una tasa de mercado como sustituto de la tasa efectivamente pactada.
+
+### Captura simultánea de tasas y consultas bancarias (PR #13)
+
+- En **Tasas de cambio → Cargar todas las tasas** hay cinco filas: BCV dólar, BCV euro, USDT, calle y menudeo. Se pueden agregar filas adicionales de menudeo para distintos bancos o para **comprar/vender divisas**. Las filas vacías se omiten; todas las completas se validan y guardan **atómicamente** en IndexedDB con `db.tasas.bulkAdd` sin editar las anteriores.
+- **Consultar BCV dólar y euro:** consulta pública de **bcv.today**, una fuente secundaria que replica BCV, mediante `https://bcv.today/api/v1/rate.json`; revisa que la fecha valor no supere la seleccionada y solicita confirmar antes de guardar. No se guarda ni usa automáticamente. La fuente oficial puede comprobarse en `https://www.bcv.org.ve/`.
+- **Consultar referencias de bancos:** preparado un endpoint de servidor Vercel `/api/tasas-bancos` con `REFERENCIASVE_API_KEY`, optativo, **nunca expuesto al cliente**. Se requiere adquirir o solicitar una clave autorizada (plan Basic o superior) al proveedor `https://referenciasve.com/developers`. **Sin clave, la consulta NO está habilitada** y informa este requisito, pero la carga manual y los enlaces oficiales siguen funcionando.
+- Los precios bancarios agregados no indican necesariamente el sentido **compra/venta** ni las comisiones finales: solo se muestran como referencias de consulta, con fuente y fecha. **No se copian automáticamente al libro ni a operaciones**. El usuario debe confirmar en el banco la oferta aplicable, la fecha y la comisión, y rellenar la fila de menudeo del banco correspondiente.
+- Páginas oficiales para consultar las condiciones: **BDV, Mercantil, Banesco, Banplus y BNC** enlazadas desde la pantalla. Esta funcionalidad **NO se conecta a la banca en línea ni lee cuentas, saldos, transacciones o credenciales**, no realiza operaciones bancarias y no utiliza capturas privadas.
+- Las consultas externas pueden fallar por conectividad, disponibilidad, restricciones CORS o API key, y deben indicar error sin generar tasas ficticias.
+
+### Bancos habituales para menudeo
+
+Las filas predeterminadas de menudeo son **Mercantil**, **Banesco** y **Banco de Venezuela (BDV)**, por ser las entidades principales utilizadas para esta actividad. **Banplus** permanece disponible en el selector **+ Otro banco / compra o venta**, pero no se añade automáticamente. No se presume que las tasas bancarias sean iguales entre entidades, ni que todos los bancos permitan operar en cualquier momento.
