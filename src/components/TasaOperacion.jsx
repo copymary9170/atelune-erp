@@ -65,7 +65,7 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
           ...Object.entries(TIPOS_TASA).map(([value, v]) => ({ value, label: v.nombre })),
         ]} />
       <Campo label={'Tasa aplicada (Bs/' + unidad + ')'} tipo="number" valor={tasaCapturada}
-        onCambio={v => actualizarCampo('tasa', v)} />
+        disabled={tipo === 'legado'} onCambio={v => actualizarCampo('tasa', v)} />
       {tipo !== 'legado' && tipo !== 'personalizada' && <div className="campo auto">
         <label>Última tasa registrada</label>
         <button className="sec mini" type="button" disabled={!tasaRegistrada} onClick={usarRegistrada}>
@@ -87,7 +87,7 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
     {valor.tasa != null && Number(valor.tasa) > 0
       ? <p className="ayuda">Tasa efectiva congelada: <strong>{Number(valor.tasa).toFixed(4)} Bs/USD</strong>.
         {montoUsd != null && Number.isFinite(Number(montoUsd)) ? ' Equivalente: ' + bs(Number(valor.tasa) * Number(montoUsd)) : ''}
-        {tipo === 'legado' ? ' Registro antiguo: fuente no identificada; no se ha cambiado.' : ''}
+        {tipo === 'legado' ? ' Registro antiguo: la fuente no está identificada. Selecciona un tipo para registrar otra tasa; el valor histórico se conserva mientras tanto.' : ''}
       </p>
       : <p className="pendiente">Falta una tasa válida para calcular el equivalente en Bs. La operación en USD no se convierte automáticamente.</p>}
     {!opcional && !(Number(valor.tasa) > 0) && <p className="pendiente">Necesitas registrar una tasa válida para esta operación en Bs.</p>}
