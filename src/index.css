@@ -7,23 +7,23 @@
 
 :root {
   /* Marca */
-  --primario: #5b45f0;
-  --primario-oscuro: #4733d6;
-  --primario-suave: #efecff;
-  --primario-borde: #d8d2ff;
-  --cian: #0fb5d9;        --cian-suave: #e0f6fc;
-  --magenta: #ee3f95;     --magenta-suave: #fde6f1;
-  --amarillo: #f7b500;    --amarillo-suave: #fff3cc;
+  --primario: #152a49;
+  --primario-oscuro: #0d1e36;
+  --primario-suave: #f0f3f8;
+  --primario-borde: #a5b6cb;
+  --cian: #355f89;        --cian-suave: #e0f6fc;
+  --magenta: #ad8748;     --magenta-suave: #fde6f1;
+  --amarillo: #c8a15b;    --amarillo-suave: #faf3e5;
 
   /* Neutros */
-  --tinta: #17163a;
-  --texto: #25254a;
-  --gris: #6b6b8c;
-  --gris-claro: #a4a4bf;
-  --fondo: #f5f6fb;
+  --tinta: #13253f;
+  --texto: #22334d;
+  --gris: #627188;
+  --gris-claro: #8897aa;
+  --fondo: #f4f6f9;
   --blanco: #ffffff;
-  --linea: #e8e9f4;
-  --linea-fuerte: #d4d6e8;
+  --linea: #e1e7ee;
+  --linea-fuerte: #cad4e0;
 
   /* Estados */
   --ok: #10914a;          --ok-fondo: #ddf6e7;
@@ -165,7 +165,7 @@ hr { border: 0; border-top: 1px solid var(--linea); margin: 16px 0; }
   display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap;
   padding: 28px 32px; margin-bottom: 20px; border-radius: var(--r-xl);
   color: #fff;
-  background: linear-gradient(120deg, #4a35e0 0%, #6a4bff 48%, #b24ad8 100%);
+  background: linear-gradient(120deg, #10213d 0%, #193657 63%, #29496a 100%);
   box-shadow: 0 14px 34px rgba(91, 69, 240, .28);
 }
 .bienvenida h1 { color: #fff; margin: 0 0 4px; }
@@ -455,3 +455,21 @@ button:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
 .tiempo-formulario .campo { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .tiempo-formulario select, .tiempo-formulario input { width: 100%; min-width: 0; }
 .tiempo-formulario button { min-height: 39px; }
+
+/* Identidad Atelune: azul noche, oro cálido y blanco. */
+.menu {background:#11243e;border-right:1px solid #243b59}
+.menu .marca strong {color:#fff}
+.menu .marca small {color:#d6c093}
+.menu .seccion {color:#c3a36c}
+.menu a {color:#d9e2ec}
+.menu a svg {color:#9fb3c9}
+.menu a:hover {background:#1b3857;color:#fff}
+.menu a:hover svg {color:#d6b579}
+.menu a.active {background:#f8f0df;color:#132840;font-weight:800}
+.menu a.active svg {color:#966d32}
+.menu .proximo {color:#b5c2d1}
+.marca-escudo {filter:drop-shadow(0 2px 8px rgba(0,0,0,.2))}
+.tarjeta {border-color:#e0e6ee}
+button:focus-visible,.boton:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible {outline-color:#b58b46}
+.bienvenida {border:1px solid rgba(214,181,121,.24)}
+.bienvenida::after {background:rgba(212,169,95,.22)}

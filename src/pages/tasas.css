@@ -1,32 +1,32 @@
 
 /* Módulo Tasas: estilos locales; no altera formularios de otros módulos. */
-.tasas-panel { --tasas-borde:#e3e5f1; --tasas-texto:#24253c; --tasas-morado:#6250d9; color:var(--tasas-texto); }
+.tasas-panel { --tasas-borde:#dfe6ee; --tasas-texto:#14263f; --tasas-morado:#b18a4d; color:var(--tasas-texto); }
 .tasas-panel .tasas-intro {display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px;flex-wrap:wrap}
 .tasas-panel .tasas-intro h1 {font-size:clamp(1.6rem,2.4vw,2.25rem);letter-spacing:-.035em;margin:0 0 8px}
-.tasas-panel .tasas-intro p {max-width:680px;line-height:1.6;font-size:.94rem;color:#626783;margin:0}
-.tasas-panel .tasas-indicador {display:inline-flex;gap:8px;align-items:center;padding:9px 14px;background:#f0ecff;border:1px solid #ded6ff;color:#533db5;border-radius:999px;font-size:.8rem;font-weight:700}
-.tasas-panel .tasas-indicador::before {content:"";width:8px;height:8px;background:#8772ea;border-radius:50%}
+.tasas-panel .tasas-intro p {max-width:680px;line-height:1.6;font-size:.94rem;color:#627188;margin:0}
+.tasas-panel .tasas-indicador {display:inline-flex;gap:8px;align-items:center;padding:9px 14px;background:#fbf4e6;border:1px solid #ead8b4;color:#785724;border-radius:999px;font-size:.8rem;font-weight:700}
+.tasas-panel .tasas-indicador::before {content:"";width:8px;height:8px;background:#b58b46;border-radius:50%}
 .tasas-panel .tasas-resumen {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px}
-.tasas-panel .tasas-cotizacion {padding:18px 17px;border:1px solid var(--tasas-borde);border-radius:16px;background:linear-gradient(165deg,#fff,#f7f7ff);min-width:0;box-shadow:0 2px 7px #35316608}
-.tasas-panel .tasas-cotizacion-titulo {font-size:.84rem;font-weight:750;color:#383758}
+.tasas-panel .tasas-cotizacion {padding:18px 17px;border:1px solid var(--tasas-borde);border-radius:16px;background:linear-gradient(165deg,#fff,#f5f7fa);min-width:0;box-shadow:0 2px 7px #35316608}
+.tasas-panel .tasas-cotizacion-titulo {font-size:.84rem;font-weight:750;color:#263d56}
 .tasas-panel .tasas-cotizacion-valor {font-size:clamp(1.12rem,2vw,1.7rem);font-weight:800;letter-spacing:-.04em;margin:9px 0 5px;overflow-wrap:anywhere}
-.tasas-panel .tasas-cotizacion-valor small {font-size:.72rem;letter-spacing:0;color:#70758b;font-weight:600}
-.tasas-panel .tasas-cotizacion-detalle {font-size:.75rem;line-height:1.45;color:#747992;min-height:2.7em}
-.tasas-panel .tasas-cotizacion-origen {display:inline-block;border-radius:99px;padding:4px 8px;font-size:.68rem;font-weight:750;background:#f0eeff;color:#5f4bc5;margin-top:11px}
+.tasas-panel .tasas-cotizacion-valor small {font-size:.72rem;letter-spacing:0;color:#66798d;font-weight:600}
+.tasas-panel .tasas-cotizacion-detalle {font-size:.75rem;line-height:1.45;color:#67788a;min-height:2.7em}
+.tasas-panel .tasas-cotizacion-origen {display:inline-block;border-radius:99px;padding:4px 8px;font-size:.68rem;font-weight:750;background:#f9eddb;color:#855d26;margin-top:11px}
 .tasas-panel .tasas-cotizacion-origen.manual {background:#eef1f6;color:#606b7d}
 .tasas-panel .tasas-cabecera {display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .tasas-panel .tasas-cabecera h2 {font-size:1.14rem;margin:0}
 .tasas-panel .tasas-seccion {margin-bottom:18px}
 .tasas-panel .tasas-seccion .ayuda {font-size:.83rem;line-height:1.6}
-.tasas-panel .tasas-estado {background:#f5f3ff;border:1px solid #e5defe;color:#4e4687;border-radius:12px;padding:12px 14px;font-size:.85rem;line-height:1.5}
+.tasas-panel .tasas-estado {background:#f3f7fa;border:1px solid #dbe5ee;color:#274766;border-radius:12px;padding:12px 14px;font-size:.85rem;line-height:1.5}
 .tasas-panel .tasas-estado.error {background:#fff3f0;border-color:#ffd9cd;color:#9b3e24}
 .tasas-panel .tasas-acciones {display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .tasas-panel .tasas-acciones button,.tasas-panel .tasas-toggle {min-height:40px}
 .tasas-panel .tasas-subtitulo {font-size:.82rem;line-height:1.5;color:#656b81;margin:0 0 14px}
-.tasas-panel .tasas-manual-nota {background:#f7f8fc;border:1px solid var(--tasas-borde);padding:12px 14px;border-radius:12px;margin-bottom:14px;font-size:.83rem;line-height:1.5}
-.tasas-panel .tasas-fila-lote {margin-bottom:10px;border:1px solid #e7e8f3;border-radius:13px;padding:13px;background:#fafaff}
+.tasas-panel .tasas-manual-nota {background:#f5f8fa;border:1px solid var(--tasas-borde);padding:12px 14px;border-radius:12px;margin-bottom:14px;font-size:.83rem;line-height:1.5}
+.tasas-panel .tasas-fila-lote {margin-bottom:10px;border:1px solid #dee6ee;border-radius:13px;padding:13px;background:#fbfcfd}
 .tasas-panel .tasas-fila-lote .fila {align-items:end}
-.tasas-panel .tasas-tipo {font-size:.87rem;color:#35304d}
+.tasas-panel .tasas-tipo {font-size:.87rem;color:#14263f}
 .tasas-panel .tasas-historial-vacio {padding:16px;text-align:center;color:#7a7e91}
 .tasas-panel .tasas-tabla-scroll {overflow-x:auto}
 .tasas-panel .tasas-tabla-scroll table {min-width:640px}
@@ -34,3 +34,10 @@
 .tasas-panel .tasas-tabla-scroll td {font-size:.85rem}
 @media(max-width:1050px){.tasas-panel .tasas-resumen{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:550px){.tasas-panel .tasas-resumen{grid-template-columns:1fr}.tasas-panel .tasas-intro{gap:10px}.tasas-panel .tasas-cotizacion{padding:14px}.tasas-panel .tasas-acciones{align-items:stretch}.tasas-panel .tasas-acciones button{width:100%}}
+
+.tasas-panel .tasas-intro h1,.tasas-panel .tasas-cabecera h2{color:#132943}
+.tasas-panel .tasas-cotizacion:first-child{border-top:3px solid #c4a064}
+.tasas-panel .tasas-cotizacion:nth-child(2){border-top:3px solid #193b60}
+.tasas-panel .tasas-cotizacion:nth-child(3){border-top:3px solid #93aabe}
+.tasas-panel .tasas-cotizacion:nth-child(4){border-top:3px solid #d0b377}
+.tasas-panel .tasas-cotizacion-valor{color:#142943}
