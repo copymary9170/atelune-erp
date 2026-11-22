@@ -25,26 +25,26 @@ export default async function handler(req, res) {
   try {
     const auth = await fetch(url.replace(/\/+$/, '') + '/auth/v1/user', {
       headers: { Authorization: bearer, apikey: anon },
-      signal: ctrl.signal,
+      signal: ctrl.signal, redirect: 'error',
     })
     if (!auth.ok) return res.status(401).json({ error: 'Sesión no válida; inicia sesión nuevamente.' })
     const user = await auth.json()
     if (!user?.id) return res.status(401).json({ error: 'No se pudo autenticar el usuario.' })
     const remote = await fetch('https://api.referenciasve.com/rates/banks?currency=USD', {
       headers: { 'x-api-key': key, Accept: 'application/json' },
-      signal: ctrl.signal,
+      signal: ctrl.signal, redirect: 'error',
     })
     if (!remote.ok) throw new Error('El proveedor bancario no respondió correctamente (' + remote.status + ').')
     const payload = await remote.json()
     if (!Array.isArray(payload)) throw new Error('Formato bancario no compatible.')
     return res.status(200).json({ fuente: 'Referencias VE', datos: payload
-      .filter(x => x && x.type === 'BANK' && x.currency === 'USD')
+      .filter(x => x && x.type === 'BANK' && x.currency === 'USD' && x.source === 'EXCHANGE_MONITOR')
       .slice(0, 80).map(x => ({ type: 'BANK', currency: 'USD',
         entityName: String(x.entityName || '').slice(0, 90),
         price: String(x.price ?? ''), createdAt: String(x.createdAt || ''),
       })) })
-  } catch (e) {
-    return res.status(502).json({ error: e?.message || 'No se pudo obtener el listado bancario.' })
+  } catch {
+    return res.status(502).json({ error: 'No se pudo obtener el listado bancario.' })
   } finally {
     clearTimeout(timeout)
   }

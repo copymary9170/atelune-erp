@@ -215,18 +215,20 @@ Estado: **preparado en rama de revisión; no activo hasta instalar la migración
 
 ### Activación
 
-1. Abre el SQL Editor del proyecto Supabase vinculado a Atelune y ejecuta el archivo `supabase/tasas_automaticas.sql`. Crea una tabla exclusiva de referencias, visible para cuentas autenticadas, sin permitirles modificarla. Un trigger impide modificar o borrar tasas ya registradas. Nunca altera `atelune_datos`.
+1. En una base Supabase aislada, verifica `supabase/tasas_automaticas.sql` y después `supabase/tasas_automaticas_permisos.sql`. El primero crea la tabla y el trigger de solo inserción. El segundo restringe los privilegios de la tabla: las cuentas autenticadas leen y `service_role` puede insertar y leer. Si la tabla de destino ya existe, comprueba que tenga el trigger y la restricción de unicidad antes de aplicar el segundo archivo.
 2. En Vercel Production verifica las variables secretas `CRON_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Nunca publicarlas, ni usar el código de referencia de una solicitud como API key.
-3. Fusiona y despliega el PR solo tras verificar el SQL, el cron autenticado y las pruebas. Vercel Cron funciona únicamente en Production.
-4. Comprueba los logs en Vercel y el historial de solo lectura en Atelune → Tasas de cambio → Referencias automáticas verificadas.
+3. En un Preview conectado a la base aislada, llama manualmente al endpoint con un `CRON_SECRET` exclusivo de ese entorno. Comprueba respuestas 401 y 200, la importación de fuentes configuradas y la ausencia de duplicados en un reintento. Compara BCV USD y EUR contra la publicación oficial del BCV por fecha valor.
+4. Con autorización, aplica el endurecimiento en el proyecto de destino y fusiona y despliega el PR. Vercel registra las tareas Cron al desplegar a Production.
+5. Comprueba el estado de cada fuente en Vercel y el historial de solo lectura en Atelune → Tasas de cambio → Referencias automáticas verificadas.
 
 ### Periodicidad, validaciones y alcance
 
 - El cron de `vercel.json` se ejecuta diariamente a las 23:00 UTC (19:00 Venezuela). GET `/api/cron-tasas` requiere `Authorization: Bearer CRON_SECRET`.
 - BCV USD y EUR: `https://bcv.today/api/v1/rate.json`, fuente secundaria con fecha valor. Si la tasa está anunciada para el siguiente día hábil, se guarda para esa vigencia pero no se aplica anticipadamente a otra operación.
-- USDT Binance: opcional con `REFERENCIASVE_API_KEY` legítima para `/rates/latest`; requiere tipo CRYPTO, moneda USDT, fuente BINANCE y fecha publicada. Una referencia de solicitud de la API NO equivale a una clave.
+- USDT Binance: opcional con `REFERENCIASVE_API_KEY` para `/rates/latest`. Requiere tipo CRYPTO, moneda USDT, fuente BINANCE y fecha publicada. Al aplicar referencias a montos USD, EUR y USDT exigen ingresar la equivalencia. Solo se ofrece USDT en su fecha de publicación en Caracas.
 - Menudeo: opcional con plan API Basic (o superior) de Referencias VE para `/rates/banks`. Mercantil, Banesco, Banco de Venezuela y Banplus (opcional). Las tasas recientes se guardan solo como `sentido=referencia`, no como el precio efectivo de compra o venta cuando el proveedor no publica esa distinción.
 - Paralelo/calle: no se actualiza automáticamente sin proveedor seguro e inequívoco. Continúa permitiendo entrada manual.
 - Los registros se insertan sin editar ninguno previo; una nueva cotización publicada constituye una nueva entrada histórica, mientras duplicados exactos se ignoran.
 - Las tasas de operaciones antiguas permanecen congeladas. La tabla de referencias automáticas compartidas es distinta de cotizaciones, pedidos y abonos personales, y no modifica los registros existentes.
 - Proveedores inaccesibles, claves ausentes, cifras fuera de rango o referencias antiguas no generan tasas supuestas. Los errores de ejecución deben revisarse en Vercel.
+- El cron indica `sin_clave` para fuentes opcionales deshabilitadas, `parcial` si solo algunas fuentes configuradas aportan referencias y HTTP 502 si ninguna aporta datos válidos o falla la inserción. `recibidas` incluye duplicados que Supabase ignora.

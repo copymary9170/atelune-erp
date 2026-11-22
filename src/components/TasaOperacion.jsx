@@ -4,6 +4,7 @@ import { Campo, Selector } from './ui.jsx'
 import { TIPOS_TASA, crearDetalleTasa, seleccionarTasa } from '../lib/tasas-multiples.js'
 import { bs } from '../lib/format.js'
 import { useTasasAutomaticas } from '../lib/use-tasas-automaticas.js'
+import { seleccionarReferenciaAutomatica } from '../lib/tasas-automaticas.js'
 
 // Componente controlado: solo usa la tasa guardada al pulsar explícitamente "Usar".
 // Las operaciones históricas conservan su tasa efectiva y el detalle congelado.
@@ -21,14 +22,16 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
   const sentido = borrador.sentido ?? (d?.tipo === tipo ? d.sentido : 'compra')
   const comisionPct = borrador.comisionPct ?? (d?.tipo === tipo ? d.comisionPct : 0)
   const tasaRegistrada = seleccionarTasa(registros || [], tipo, fecha || '9999-12-31')
-  const tasaAutomatica = automaticas.find(r => r.tipo === tipo &&
-    r.fecha_valor <= (fecha || '9999-12-31') &&
-    (tipo !== 'menudeo' || (r.entidad === entidad && r.sentido === sentido)))
+  const tasaAutomatica = seleccionarReferenciaAutomatica(automaticas, tipo, fecha)
   const campos = {
     tasa: tasaCapturada, usdPorUnidad, entidad, sentido, comisionPct,
     referenciaId: borrador.referenciaId ?? null,
-    fechaReferencia: borrador.fechaReferencia ?? null,
-    horaReferencia: borrador.horaReferencia ?? null,
+    fechaReferencia: borrador.fechaReferencia ?? d?.fecha ?? null,
+    horaReferencia: borrador.horaReferencia ?? d?.hora ?? null,
+    procedencia: borrador.procedencia ?? (d?.referenciaAutomaticaId != null ? {
+      fuenteExterna: d.fuenteExterna, urlFuente: d.urlFuente,
+      referenciaAutomaticaId: d.referenciaAutomaticaId,
+    } : null),
   }
 
   function actualizarTipo(nuevo) {
@@ -41,6 +44,7 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
       siguiente.referenciaId = null
       siguiente.fechaReferencia = null
       siguiente.horaReferencia = null
+      siguiente.procedencia = null
     }
     // La tasa efectiva solo existe cuando la conversión es completa.
     let detalle = null
@@ -51,6 +55,7 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
         hora: siguiente.horaReferencia,
         referenciaId: siguiente.referenciaId,
       })
+      if (siguiente.procedencia) detalle = { ...detalle, ...siguiente.procedencia }
     } catch {}
     onCambio({ tipoTasa: tipo, tasa: detalle?.efectivaBsPorUsd ?? null,
       tasaDetalle: detalle, tasaBorrador: siguiente })
@@ -64,11 +69,12 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
       entidad: t.entidad || '', sentido: t.sentido || 'compra', comisionPct: 0,
       fechaReferencia: t.fecha_valor, horaReferencia: null,
       referenciaId: null,
+      procedencia: { fuenteExterna: t.fuente, urlFuente: t.url_fuente, referenciaAutomaticaId: t.id },
     }
     try {
       const detalle = crearDetalleTasa({ tipo, ...datos, fecha: t.fecha_valor })
       onCambio({tipoTasa:tipo,tasa:detalle.efectivaBsPorUsd,
-        tasaDetalle:{...detalle,fuenteExterna:t.fuente,urlFuente:t.url_fuente,referenciaAutomaticaId:t.id},
+        tasaDetalle:{...detalle,...datos.procedencia},
         tasaBorrador:datos})
     } catch {
       onCambio({tipoTasa:tipo,tasa:null,tasaDetalle:null,

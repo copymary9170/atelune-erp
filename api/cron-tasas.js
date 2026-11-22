@@ -1,75 +1,85 @@
-import { interpretarBCV, interpretarUSDTReferenciasVE, interpretarBancosReferenciasVE, URL_BCV } from '../src/lib/tasas-automaticas.js'
+import { timingSafeEqual } from 'node:crypto'
+import {
+  fechaCaracas, interpretarBCV, interpretarUSDTReferenciasVE, interpretarBancosReferenciasVE, URL_BCV,
+} from '../src/lib/tasas-automaticas.js'
 
-// Vercel Cron: solo servidor, solo con CRON_SECRET, sin sesión del navegador.
-// La tabla compartida es append-only y los datos personales no se actualizan.
-const nombreEnv = re => {
-  const key = Object.keys(process.env).find(x => re.test(x) && process.env[x])
-  return key ? process.env[key] : ''
+const fail = (res, code, error) => res.status(code).json({ error })
+
+function cronAutorizado(header, secreto) {
+  if (!secreto || typeof header !== 'string') return false
+  const recibido = Buffer.from(header)
+  const esperado = Buffer.from('Bearer ' + secreto)
+  return recibido.length === esperado.length && timingSafeEqual(recibido, esperado)
 }
-const fail = (res,code,error) => res.status(code).json({error})
 
-export default async function handler(req,res) {
-  res.setHeader('Cache-Control','no-store')
-  if (req.method !== 'GET') return fail(res,405,'Método no permitido')
-  const secreto=process.env.CRON_SECRET
-  if (!secreto || req.headers.authorization !== 'Bearer ' + secreto)
-    return fail(res,401,'Cron no autorizado')
-  const supaUrl=nombreEnv(/(?:^|_)SUPABASE_URL$/)
-  const servicio=process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!supaUrl || !servicio)
-    return fail(res,503,'Falta configurar Supabase Service Role o URL. No se ha guardado nada.')
-  const ctrl=new AbortController()
-  const reloj=setTimeout(()=>ctrl.abort(),9000)
+async function consultarFuente({ nombre, url, interpretar, clave, hoy, ahora }) {
   try {
-    const respuesta=await fetch(URL_BCV,{signal:ctrl.signal,headers:{Accept:'application/json'}})
-    if (!respuesta.ok) throw new Error('BCV Today HTTP ' + respuesta.status)
-    const hoy=new Date().toISOString().slice(0,10)
-    const registros=interpretarBCV(await respuesta.json(),hoy)
-    // El feed USDT es opcional: jamás usar el código de referencia de una
-    // solicitud como si fuera una API key. Fallo del proveedor no bloquea BCV.
-    const proveedorKey=process.env.REFERENCIASVE_API_KEY
-    let avisoProveedor=''
-    if (proveedorKey) {
-      try {
-        const externa=await fetch('https://api.referenciasve.com/rates/latest?currency=USDT&source=BINANCE',{
-          headers:{'x-api-key':proveedorKey,Accept:'application/json'},signal:ctrl.signal,
-        })
-        if (!externa.ok) throw new Error('API USDT HTTP '+externa.status)
-        registros.push(...interpretarUSDTReferenciasVE(await externa.json(),hoy))
-      } catch {
-        avisoProveedor='USDT no se incorporó: proveedor ausente, inválido o no disponible.'
-      }
-      try {
-        const bancos=await fetch('https://api.referenciasve.com/rates/banks?currency=USD',{
-          headers:{'x-api-key':proveedorKey,Accept:'application/json'},signal:ctrl.signal,
-        })
-        if (!bancos.ok) throw new Error('API bancaria HTTP '+bancos.status)
-        registros.push(...interpretarBancosReferenciasVE(await bancos.json(),hoy))
-      } catch {
-        avisoProveedor += ' Bancos no incorporados: el proveedor exige plan Basic, está inaccesible o no ofrece datos recientes.'
-      }
-    }
-    const endpoint=supaUrl.replace(/\/+$/,'')+'/rest/v1/atelune_tasas_automaticas'
-    const guardar=await fetch(endpoint,{
-      method:'POST',signal:ctrl.signal,
-      headers:{
-        apikey:servicio,Authorization:'Bearer '+servicio,
-        'Content-Type':'application/json',
-        Prefer:'resolution=ignore-duplicates,return=minimal',
+    const headers = { Accept: 'application/json' }
+    if (clave) headers['x-api-key'] = clave
+    const respuesta = await fetch(url, {
+      headers, redirect: 'error', signal: AbortSignal.timeout(8000),
+    })
+    if (!respuesta.ok) return { nombre, estado: 'error_http', codigo: respuesta.status, registros: [] }
+    const registros = interpretar(await respuesta.json(), hoy, ahora)
+    return { nombre, estado: registros.length ? 'ok' : 'sin_datos_validos', registros }
+  } catch {
+    return { nombre, estado: 'error_de_consulta_o_validacion', registros: [] }
+  }
+}
+
+export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store')
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET')
+    return fail(res, 405, 'Método no permitido')
+  }
+  if (!cronAutorizado(req.headers?.authorization, process.env.CRON_SECRET))
+    return fail(res, 401, 'Cron no autorizado')
+
+  let endpoint
+  const servicio = process.env.SUPABASE_SERVICE_ROLE_KEY
+  try {
+    const url = new URL(process.env.SUPABASE_URL)
+    if (!servicio || url.protocol !== 'https:' || url.username || url.password ||
+        url.pathname !== '/' || url.search || url.hash) throw new Error()
+    endpoint = new URL('/rest/v1/atelune_tasas_automaticas', url).href
+  } catch {
+    return fail(res, 503, 'Configuración de Supabase incompleta o inválida')
+  }
+
+  const ahora = Date.now()
+  const hoy = fechaCaracas(new Date(ahora))
+  const clave = process.env.REFERENCIASVE_API_KEY
+  const fuentes = [
+    { nombre: 'bcv', url: URL_BCV, interpretar: interpretarBCV },
+    { nombre: 'usdt', url: 'https://api.referenciasve.com/rates/latest?currency=USDT&source=BINANCE',
+      interpretar: interpretarUSDTReferenciasVE, requiereClave: true },
+    { nombre: 'bancos', url: 'https://api.referenciasve.com/rates/banks?currency=USD',
+      interpretar: interpretarBancosReferenciasVE, requiereClave: true },
+  ]
+  const resultados = await Promise.all(fuentes.map(fuente => fuente.requiereClave && !clave
+    ? { nombre: fuente.nombre, estado: 'sin_clave', registros: [] }
+    : consultarFuente({ ...fuente, hoy, ahora, clave: fuente.requiereClave ? clave : undefined })))
+  const registros = resultados.flatMap(r => r.registros)
+  const estados = resultados.map(({ nombre, estado, codigo }) => ({ nombre, estado, codigo }))
+  if (!registros.length) return res.status(502).json({ error: 'Sin referencias válidas', fuentes: estados })
+
+  try {
+    const guardar = await fetch(endpoint, {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(8000),
+      headers: {
+        apikey: servicio, Authorization: 'Bearer ' + servicio,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=ignore-duplicates,return=minimal',
       },
-      body:JSON.stringify(registros),
+      body: JSON.stringify(registros),
     })
-    if (!guardar.ok) {
-      const detalle=(await guardar.text()).slice(0,200)
-      throw new Error('No se guardaron referencias: '+guardar.status+' '+detalle)
-    }
-    return res.status(200).json({
-      estado:'ok',recibidas:registros.length,tipos:registros.map(x=>x.tipo),
-      fecha_valor:registros[0].fecha_valor,
-      avisoProveedor,
-      mensaje:'Referencias verificadas e insertadas sin modificar valores anteriores; duplicados ignorados.',
-    })
-  } catch(e) {
-    return fail(res,502,String(e?.message || 'Error de proveedor').slice(0,230))
-  } finally {clearTimeout(reloj)}
+    if (!guardar.ok) return fail(res, 502, 'Supabase rechazó la inserción de referencias')
+  } catch {
+    return fail(res, 502, 'No se pudo confirmar la inserción de referencias')
+  }
+  return res.status(200).json({
+    estado: estados.some(r => r.estado !== 'ok' && r.estado !== 'sin_clave') ? 'parcial' : 'ok',
+    recibidas: registros.length, tipos: [...new Set(registros.map(x => x.tipo))], fuentes: estados,
+  })
 }
