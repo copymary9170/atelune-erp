@@ -52,8 +52,8 @@ export default function Tasas() {
     setError(''); setMensaje(''); setOcupado(true)
     try {
       if (!supabase) throw new Error('Primero conecta Atelune a Supabase para consultar la API bancaria.')
-      const { data } = await supabase.auth.getSession()
-      const token = data?.session?.access_token
+      const { data: datosSesion } = await supabase.auth.getSession()
+      const token = datosSesion?.session?.access_token
       if (!token) throw new Error('Inicia sesión para consultar referencias bancarias.')
       const resp = await fetch('/api/tasas-bancos', {
         cache: 'no-store', headers: { Authorization: 'Bearer ' + token },
