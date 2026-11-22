@@ -19,18 +19,32 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
   const sentido = borrador.sentido ?? (d?.tipo === tipo ? d.sentido : 'compra')
   const comisionPct = borrador.comisionPct ?? (d?.tipo === tipo ? d.comisionPct : 0)
   const tasaRegistrada = seleccionarTasa(registros || [], tipo, fecha || '9999-12-31')
-  const campos = { tasa: tasaCapturada, usdPorUnidad, entidad, sentido, comisionPct }
+  const campos = {
+    tasa: tasaCapturada, usdPorUnidad, entidad, sentido, comisionPct,
+    referenciaId: borrador.referenciaId ?? null,
+    fechaReferencia: borrador.fechaReferencia ?? null,
+    horaReferencia: borrador.horaReferencia ?? null,
+  }
 
   function actualizarTipo(nuevo) {
     onCambio({ tipoTasa: nuevo, tasa: null, tasaDetalle: null, tasaBorrador: {} })
   }
   function actualizarCampo(campo, v) {
     const siguiente = { ...campos, [campo]: v }
+    // Si se cambia la tasa Bs original ya no se debe atribuir a la referencia.
+    if (campo === 'tasa') {
+      siguiente.referenciaId = null
+      siguiente.fechaReferencia = null
+      siguiente.horaReferencia = null
+    }
     // La tasa efectiva solo existe cuando la conversión es completa.
     let detalle = null
     try {
       detalle = crearDetalleTasa({
-        tipo, ...siguiente, fecha, referenciaId: null,
+        tipo, ...siguiente,
+        fecha: siguiente.fechaReferencia || fecha,
+        hora: siguiente.horaReferencia,
+        referenciaId: siguiente.referenciaId,
       })
     } catch {}
     onCambio({ tipoTasa: tipo, tasa: detalle?.efectivaBsPorUsd ?? null,
@@ -44,6 +58,9 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
       entidad: tasaRegistrada.entidad || '',
       sentido: tasaRegistrada.sentido || 'compra',
       comisionPct: tasaRegistrada.comisionPct ?? 0,
+      referenciaId: tasaRegistrada.id,
+      fechaReferencia: tasaRegistrada.fecha,
+      horaReferencia: tasaRegistrada.hora || null,
     }
     try {
       const detalle = crearDetalleTasa({
