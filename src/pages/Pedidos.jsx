@@ -224,7 +224,7 @@ function AbonoForm({ pedido, saldo, metodos, onCerrar }) {
   async function guardar() {
     if (!(n(a.monto) > 0) || !Number.isFinite(Number(a.monto))) return alert('Monto inválido.')
     if (!a.metodo) return alert('Selecciona método de pago.')
-    if (/\b(bs\.?|ves|bol[ií]var(?:es)?)\b/i.test(a.metodo) && !(Number(a.tasa) > 0)) return alert('El abono en bolívares requiere una tasa de cambio válida.')
+    if (/(?:\b(?:bs\.?|ves|bol[ií]var(?:es)?)\b|pago\s*m[oó]vil)/i.test(a.metodo) && !(Number(a.tasa) > 0)) return alert('El abono en bolívares requiere una tasa de cambio válida.')
     await db.transaction('rw', db.pedidos, async () => { const actual = await db.pedidos.get(pedido.id); if (!actual || actual.estado === 'cancelado') throw new Error('Pedido cancelado'); await db.pedidos.update(pedido.id, { abonos: [...(actual.abonos || []), {...a, registradoEn:new Date().toISOString()}] }) })
     onCerrar()
   }
