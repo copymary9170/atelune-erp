@@ -52,6 +52,7 @@ instancia.version(4).stores({
   cajaArqueos: '++id, fecha, metodo, [fecha+metodo]',
 })
 instancia.version(5).stores({ cobrosPendientes: 'pedidoId' })
+instancia.version(6).stores({ cobrosRevisados: 'operacion' })
   return instancia
 }
 

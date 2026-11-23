@@ -5,13 +5,14 @@ import { db, exportarRespaldo, importarRespaldo, agregarDatos, reglaGeneral } fr
 import { Campo, useConfig } from '../components/ui.jsx'
 import { totalCostosFijos, fijosPorPedido, personas as listaPersonas, validarRegla } from '../lib/calc.js'
 import { CATEGORIAS_GASTO } from '../lib/contabilidad.js'
-import { nubeConfigurada, supabase, useSesion, useEstadoNube, sincronizarAhora, metaActual } from '../nube.js'
-import { usd, fecha } from '../lib/format.js'
+import { nubeConfigurada, supabase, useSesion, useEstadoNube, sincronizarAhora, metaActual, exportarRespaldoCobros } from '../nube.js'
+import { usd, fecha, hoy } from '../lib/format.js'
 
 export default function Configuracion() {
   const guardada = useConfig()
   const [c, setC] = useState(guardada)
   const [estado, setEstado] = useState('')
+  const [estadoCobros, setEstadoCobros] = useState('')
   const archivo = useRef()
   const productosInv = useLiveQuery(() => db.productos.orderBy('nombre').toArray(), [], [])
   const archivoCarga = useRef()
@@ -54,6 +55,23 @@ export default function Configuracion() {
     a.download = `atelune-respaldo-${datos.fecha.slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(a.href)
+  }
+
+  async function descargarCobros() {
+    try {
+      const datos = await exportarRespaldoCobros()
+      if (!datos.operaciones.length) return setEstadoCobros('Este dispositivo no tiene intentos de cobro para respaldar.')
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' }))
+      a.download = `atelune-cobros-pendientes-${hoy()}.json`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      setEstadoCobros(datos.operaciones.some(o => !o.solicitudCompleta)
+        ? 'Respaldo de cobros descargado. Algunas solicitudes tienen campos omitidos y requieren conciliación manual.'
+        : 'Respaldo de cobros descargado.')
+    } catch (error) {
+      setEstadoCobros(error.message)
+    }
   }
 
   async function restaurar(e) {
@@ -229,6 +247,12 @@ export default function Configuracion() {
           <button className="sec" onClick={() => archivoCarga.current.click()}>Agregar productos y equipos desde archivo…</button>
           <input ref={archivoCarga} type="file" accept="application/json" hidden onChange={agregarDesdeArchivo} />
         </div>
+        {nubeConfigurada && <>
+          <h3>Cobros pendientes y en revisión</h3>
+          <p className="ayuda">Guarda este archivo por separado en un lugar seguro. Contiene información de pagos para conciliar los intentos de este dispositivo.</p>
+          <button type="button" className="sec" onClick={descargarCobros}>Descargar respaldo de cobros pendientes</button>
+          {estadoCobros && <p role="status">{estadoCobros}</p>}
+        </>}
       </div>
     </>
   )

@@ -2,7 +2,8 @@
 // solo en este navegador, como en las etapas anteriores.
 import { createClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
-import { anularAbonoLocal, db, exportarDatos, importarRespaldo, prepararAbono, registrarAbono, tieneDatos, TABLAS } from './db.js'
+import { anularAbonoLocal, db, exportarDatos, importarRespaldo, nombreBaseCuenta, prepararAbono, registrarAbono, tieneDatos, TABLAS } from './db.js'
+import { estadoErrorCobro, generarRespaldoCobros } from './lib/respaldo-cobros.js'
 import { validarRespuestaRemota } from './lib/validacion-nube.js'
 import { crearSincronizador } from './lib/sincronizador.js'
 
@@ -19,8 +20,10 @@ export const supabase = nubeConfigurada ? createClient(URL, CLAVE, { auth: { per
 const TABLA = 'atelune_datos'
 export const mensajeOperacion = {
   local: 'Guardado localmente.',
-  pendiente: 'Pendiente de sincronización. La nube aún no confirmó la operación.',
+  pendiente: 'Pendiente de confirmación. El saldo confirmado sigue igual.',
   nube: 'Confirmado en la nube.',
+  conflicto: 'Rechazado por conflicto. Revisa el saldo compartido y el comprobante antes de registrar un nuevo intento.',
+  conciliacion: 'Requiere conciliación manual. Revisa el pedido y sus abonos en la nube antes de registrar otro intento.',
 }
 
 // ---------- Estado observable ----------
@@ -145,6 +148,27 @@ export const sincronizarAhora = () => sinc?.sincronizar()
 export const resolverConflicto = (eleccion) => sinc?.resolver(eleccion)
 export const metaActual = () => (sinc ? metaPara(sinc.uid).get() : null)
 
+export async function exportarRespaldoCobros() {
+  const sesion = sinc
+  const base = db
+  if (!sesion || base.name !== nombreBaseCuenta(sesion.uid)) throw new Error('Abre tu cuenta para respaldar los cobros.')
+  const operaciones = await base.transaction('r', base.cobrosPendientes, base.cobrosRevisados, async () =>
+    [...await base.cobrosPendientes.toArray(), ...await base.cobrosRevisados.toArray()])
+  if (sinc !== sesion || base !== db) throw new Error('La cuenta cambió. Vuelve a descargar el respaldo.')
+  return generarRespaldoCobros(sesion.uid, operaciones)
+}
+
+export async function archivarCobroRevisado(pedidoId, operacion) {
+  const base = db
+  await base.transaction('rw', base.cobrosPendientes, base.cobrosRevisados, async () => {
+    const actual = await base.cobrosPendientes.get(pedidoId)
+    if (!actual || actual.operacion !== operacion || !['conflicto','conciliacion'].includes(actual.estado))
+      throw new Error('La operación cambió. Revisa el estado actualizado.')
+    await base.cobrosRevisados.add({ ...actual, revisadoEn: new Date().toISOString() })
+    await base.cobrosPendientes.delete(pedidoId)
+  })
+}
+
 export async function guardarCobro(pedidoId, datos) {
   if (!nubeConfigurada) {
     await registrarAbono(pedidoId, datos)
@@ -167,9 +191,9 @@ export async function guardarAnulacion(pedidoId, indice, anterior, motivo) {
 
 async function guardarSolicitud(base, pedidoId, operacion, tipo, solicitud) {
   try {
-    await base.cobrosPendientes.add({ pedidoId, operacion, tipo, solicitud, version: null })
+    await base.cobrosPendientes.add({ pedidoId, operacion, tipo, solicitud, version: null, estado: 'pendiente' })
   } catch (error) {
-    if (error.name === 'ConstraintError') throw new Error('Ya hay una operación pendiente para este pedido. Reinténtala primero.')
+    if (error.name === 'ConstraintError') throw new Error('Ya hay una operación para este pedido. Revisa su estado antes de registrar otra.')
     throw error
   }
   return reenviarCobroPendiente(pedidoId, base)
@@ -179,13 +203,14 @@ export async function reenviarCobroPendiente(pedidoId, base = db) {
   const sesion = sinc
   let pendiente = await base.cobrosPendientes.get(pedidoId)
   if (!pendiente || !sesion || base !== db) return 'pendiente'
+  if (pendiente.estado && pendiente.estado !== 'pendiente') return pendiente.estado
   if (pendiente.version == null) {
     await sesion.sincronizar()
     const meta = sinc === sesion ? metaActual() : null
     if (!meta?.version || meta.sucio || estado.fase !== 'ok') return 'pendiente'
     pendiente = await base.transaction('rw', base.cobrosPendientes, async () => {
       const actual = await base.cobrosPendientes.get(pedidoId)
-      if (!actual || actual.operacion !== pendiente.operacion) return null
+      if (!actual || actual.operacion !== pendiente.operacion || (actual.estado && actual.estado !== 'pendiente')) return null
       if (actual.version != null) return actual
       await base.cobrosPendientes.update(pedidoId, { version: meta.version })
       return { ...actual, version: meta.version }
@@ -196,15 +221,18 @@ export async function reenviarCobroPendiente(pedidoId, base = db) {
     p_cuenta: sesion.uid, p_operacion: pendiente.operacion, p_pedido: pedidoId, p_version: pendiente.version,
     p_tipo: pendiente.tipo, p_solicitud: pendiente.solicitud,
   })
-  if (error && !['PT409','22023','22007','22008','22P02','P0002'].includes(error.code)) return 'pendiente'
+  const resultado = error ? estadoErrorCobro(error.code) : 'nube'
+  if (resultado === 'pendiente') return resultado
   if (!error && (!Number.isSafeInteger(versionConfirmada) || versionConfirmada <= pendiente.version)) return 'pendiente'
   await base.transaction('rw', base.cobrosPendientes, async () => {
     const actual = await base.cobrosPendientes.get(pedidoId)
-    if (actual?.operacion === pendiente.operacion) await base.cobrosPendientes.delete(pedidoId)
+    if (actual?.operacion !== pendiente.operacion) return
+    if (resultado === 'nube') await base.cobrosPendientes.delete(pedidoId)
+    else await base.cobrosPendientes.update(pedidoId, { estado: resultado, codigoError: error.code,
+      cambioEstadoEn: new Date().toISOString() })
   })
   if (sinc === sesion) await sesion.sincronizar()
-  if (error) throw new Error(error.message || 'La nube rechazó la operación. Revisa el pedido.')
-  return 'nube'
+  return resultado
 }
 
 // Vuelve a sincronizar al recuperar la conexión, al volver a la pestaña y cada minuto.
