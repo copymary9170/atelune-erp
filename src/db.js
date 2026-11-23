@@ -5,6 +5,7 @@ import { calcularArqueo, resumenMovimientosCaja } from './lib/caja.js'
 import { seleccionarTasa } from './lib/tasas-multiples.js'
 import { congelarConversion, validarFechaOperacion } from './lib/pagos.js'
 import { borradorCotizacion, calcularCotizacionRapida } from './lib/cotizaciones.js'
+import { calcularCompra } from './lib/compras.js'
 
 // Base de datos local (IndexedDB, dentro del navegador).
 // Toda la lógica de datos pasa por este archivo para poder migrar
@@ -119,13 +120,13 @@ export async function tasaVigente(tipo = 'bcv_usd', fechaMax = '9999-12-31') {
 
 // ---------- Inventario ----------
 
-export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen, tasa, tasaDetalle, montoBs }) {
+export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen, tasa, tasaDetalle, compra }) {
   if (fecha != null) validarFechaOperacion(fecha)
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     const p = await db.productos.get(productoId)
     if (!p) throw new Error('Producto no encontrado')
     const r = aplicarMovimiento(p, { tipo, cantidad, costoUnitario })
-    const convertido = tipo === 'entrada'
+    const montoBs = compra ? compra.equivalenteBs : tipo === 'entrada'
       ? congelarConversion(Number(cantidad) * Number(costoUnitario), tasa, pagadoCon) : null
     await db.productos.update(productoId, { stock: r.stock, costoPromedio: r.costoPromedio })
     return db.movimientos.add({
@@ -141,7 +142,8 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
       pagadoCon: pagadoCon ?? null,
       tasa: tasa == null ? null : Number(tasa),
       tasaDetalle: tasaDetalle ? structuredClone(tasaDetalle) : null,
-      montoBs: convertido === null ? null : montoBs ?? convertido,
+      montoBs,
+      ...(compra ? { compra } : {}),
       origen: origen ?? null,
       stockResultante: r.stock,
       costoPromedioResultante: r.costoPromedio,
@@ -511,25 +513,26 @@ export async function agregarDatos(datos) {
 }
 
 // ---------- Compra de varios materiales ----------
-/** lineas: [{ productoId, cantidadUso, costoTotal }] con el delivery ya incluido en costoTotal. */
-export async function registrarCompra({ lineas, fecha, proveedorId, pagadoCon, referencia, nota, tasa, tasaDetalle }) {
+/** Cada importe de material llega en la moneda de la factura, antes del delivery. */
+export async function registrarCompra({ lineas, fecha, proveedorId, pagadoCon, referencia, nota, tasa, tasaDetalle,
+  monedaFactura = 'USD', monedaPago, delivery, reparto }) {
   validarFechaOperacion(fecha)
-  if (!lineas.length || lineas.some(l => l.costoTotal == null || l.costoTotal === '' ||
-      !Number.isFinite(Number(l.costoTotal)) || Number(l.costoTotal) < 0))
-    throw new Error('Indica un costo válido para cada material.')
+  const calculo = calcularCompra({ importes: lineas.map(l => l.importeFactura ?? l.costoTotal),
+    delivery, reparto, monedaFactura, pagadoCon, monedaPago, tasa })
+  const detalle = tasa > 0 ? {
+    fecha, unidad: 'USD', bsPorUnidad: Number(tasa), usdPorUnidad: 1, ...tasaDetalle,
+    origen: tasaDetalle?.origen || (tasaDetalle?.fuenteExterna ? 'referencia externa' : 'manual'),
+    efectivaBsPorUsd: Number(tasa),
+  } : null
   return db.transaction('rw', db.productos, db.movimientos, async () => {
-    // Redondear el total acumulado evita que un centavo de Bs se pierda entre renglones.
-    let acumulado = 0
-    let anteriorBs = 0
-    for (const l of lineas) {
-      acumulado += Number(l.costoTotal)
-      const acumuladoBs = congelarConversion(acumulado, tasa, pagadoCon)
+    for (const [i, l] of lineas.entries()) {
+      const compra = calculo.lineas[i]
       await registrarMovimiento({
-        productoId: l.productoId, tipo: 'entrada', cantidad: l.cantidadUso, costoUnitario: l.costoTotal / l.cantidadUso,
-        fecha, proveedorId, pagadoCon, referencia, nota, tasa, tasaDetalle,
-        montoBs: acumuladoBs == null ? null : redondear(acumuladoBs - anteriorBs),
+        productoId: l.productoId, tipo: 'entrada', cantidad: l.cantidadUso,
+        costoUnitario: compra.costoTotalUsd / l.cantidadUso,
+        fecha, proveedorId, pagadoCon, referencia, nota, tasa, tasaDetalle: detalle,
+        compra,
       })
-      anteriorBs = acumuladoBs
     }
   })
 }
