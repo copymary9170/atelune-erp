@@ -2,14 +2,18 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, registrarMovimiento, registrarCompra, TIPOS_PRODUCTO, UNIDADES } from '../db.js'
 import { Campo, Modal, Selector, SelectorPago, useConfig } from '../components/ui.jsx'
-import { n, repartirDelivery } from '../lib/calc.js'
+import { n } from '../lib/calc.js'
+import { calcularCompra, centavosFactura, requiereMonedaPago } from '../lib/compras.js'
 import { equivalenteBs, monedaMetodoPago } from '../lib/pagos.js'
+import { TIPOS_TASA } from '../lib/tasas-multiples.js'
 import TasaOperacion from '../components/TasaOperacion.jsx'
 import { usd, bs, num, fecha, hoy } from '../lib/format.js'
 
 const opcionesTipo = Object.entries(TIPOS_PRODUCTO).map(([value, label]) => ({ value, label }))
 const opcionesUnidad = UNIDADES.map((u) => ({ value: u, label: u }))
 const NOMBRE_MOV = { entrada: 'Entrada (compra)', salida: 'Salida (uso/venta)', merma: 'Merma / daño', ajuste: 'Ajuste por conteo' }
+const monedas = [{ value: 'USD', label: 'USD' }, { value: 'Bs', label: 'Bs' }]
+const importe = (valor, moneda) => moneda === 'Bs' ? bs(valor) : usd(valor)
 
 export const bajoStock = (p) => p.stockMinimo != null && n(p.stock) <= n(p.stockMinimo)
 
@@ -269,8 +273,17 @@ function Kardex({ producto: p, onCerrar }) {
                 <td className="num">{num(m.stockResultante)}</td>
                 <td className="num">{usd(m.costoPromedioResultante)}</td>
                 <td>{m.referencia}{m.nota && <div className="desglose">{m.nota}</div>}
+                  {m.compra && <div className="desglose">
+                    Factura: {importe(m.compra.totalFactura, m.compra.monedaFactura)}
+                    {m.compra.delivery > 0 && ' · Incluye ' + importe(m.compra.delivery, m.compra.monedaFactura) + ' de delivery'}
+                    {m.compra.monedaPago && <div>Pago: {importe(m.compra.importePago, m.compra.monedaPago)} · {m.pagadoCon}</div>}
+                  </div>}
                   {m.tipo === 'entrada' && m.tasa > 0 && <div className="desglose">
                     {bs(m.montoBs ?? equivalenteBs(m.cantidad * m.costoUnitario, m.tasa))} · {num(m.tasa, 4)} Bs/USD
+                    {m.compra && m.tasaDetalle && (
+                      <> · {m.tasaDetalle.fuenteExterna || m.tasaDetalle.fuente || TIPOS_TASA[m.tasaDetalle.tipo]?.nombre || 'Captura manual'}
+                        {m.tasaDetalle.fecha && ' · ref. ' + fecha(m.tasaDetalle.fecha)}</>
+                    )}
                   </div>}
                 </td>
               </tr>
@@ -287,45 +300,59 @@ function Kardex({ producto: p, onCerrar }) {
 // Compra de varios materiales con delivery repartido entre ellos.
 function CompraForm({ productos, config, onCerrar }) {
   const proveedores = useLiveQuery(() => db.proveedores.orderBy('nombre').toArray(), [], [])
-  const [c, setC] = useState({ fecha: hoy(), proveedorId: '', pagadoCon: '', referencia: '', delivery: null, modo: 'costo', tasa: null, tipoTasa: 'bcv_usd', tasaDetalle: null })
+  const [c, setC] = useState({ fecha: hoy(), proveedorId: '', pagadoCon: '', referencia: '', delivery: null,
+    reparto: 'costo', monedaFactura: 'USD', monedaPago: '', tasa: null, tipoTasa: 'bcv_usd', tasaDetalle: null })
   const [lineas, setLineas] = useState([{ productoId: '', cantidad: null, unidad: 'compra', costo: null }])
   const [guardando, setGuardando] = useState(false)
-  const set = (k, v) => setC((x) => ({ ...x, [k]: v }))
-  const setLinea = (i, k, v) => setLineas((ls) => ls.map((l, j) => (j === i ? { ...l, [k]: v } : l)))
+  const [error, setError] = useState('')
+  const set = (k, v) => {
+    setError('')
+    setC(x => k === 'pagadoCon' ? { ...x, pagadoCon: v, monedaPago: '' } : { ...x, [k]: v })
+  }
+  const setLinea = (i, k, v) => {
+    setError('')
+    setLineas(ls => ls.map((l, j) => j === i ? { ...l, [k]: v } : l))
+  }
   const prod = (l) => productos.find((p) => p.id === Number(l.productoId))
   const cantUso = (l) => { const p = prod(l); return p ? n(l.cantidad) * (l.unidad === 'compra' ? n(p.factor) || 1 : 1) : 0 }
-  const partes = repartirDelivery(lineas.map((l) => l.costo), c.delivery, c.modo)
-  const total = lineas.reduce((s, l) => s + n(l.costo), 0) + n(c.delivery)
+  const monedaPagoFija = monedaMetodoPago(c.pagadoCon)
+  const requiereTasa = c.monedaFactura === 'Bs' || (monedaPagoFija || c.monedaPago) === 'Bs'
+  let calculo, errorCalculo
+  try {
+    calculo = calcularCompra({ ...c, importes: lineas.map(l => l.costo) })
+  } catch (e) {
+    errorCalculo = e.message
+  }
 
   async function guardar() {
-    if (lineas.some((l) => !prod(l))) return alert('Elige el producto de cada línea.')
-    if (lineas.some((l) => !(cantUso(l) > 0))) return alert('Escribe la cantidad de cada línea.')
-    if (lineas.some((l) => l.costo == null || !Number.isFinite(Number(l.costo)) || l.costo < 0))
-      return alert('Escribe un costo no negativo por cada línea (sin delivery).')
-    if (c.delivery != null && (!Number.isFinite(Number(c.delivery)) || c.delivery < 0))
-      return alert('Escribe un costo de delivery no negativo.')
-    if (new Set(lineas.map((l) => Number(l.productoId))).size !== lineas.length) return alert('Hay un producto repetido: júntalo en una sola línea.')
+    if (lineas.some(l => !prod(l))) return setError('Elige el producto de cada renglón.')
+    if (lineas.some(l => !(cantUso(l) > 0))) return setError('Escribe una cantidad mayor que cero por renglón.')
+    if (new Set(lineas.map(l => Number(l.productoId))).size !== lineas.length)
+      return setError('Hay un producto repetido. Agrúpalo en un solo renglón.')
+    if (!calculo) return setError(errorCalculo)
     setGuardando(true)
     try {
       await registrarCompra({
-        lineas: lineas.map((l, i) => ({ productoId: Number(l.productoId), cantidadUso: cantUso(l), costoTotal: n(l.costo) + partes[i] })),
-        fecha: c.fecha, proveedorId: c.proveedorId ? Number(c.proveedorId) : null, pagadoCon: c.pagadoCon || null, referencia: c.referencia, tasa: c.tasa, tasaDetalle: c.tasaDetalle,
-        nota: n(c.delivery) > 0 ? `Incluye delivery repartido (${usd(c.delivery)} en total)` : '',
+        ...c,
+        proveedorId: c.proveedorId ? Number(c.proveedorId) : null,
+        pagadoCon: c.pagadoCon || null,
+        lineas: lineas.map(l => ({ productoId: Number(l.productoId), cantidadUso: cantUso(l), importeFactura: l.costo })),
       })
       onCerrar()
     } catch (error) {
-      alert(error.message)
+      setError(error.message)
       setGuardando(false)
     }
   }
 
   return (
-    <Modal titulo="Registrar compra" onCerrar={onCerrar} ancho>
+    <Modal titulo="Registrar compra" onCerrar={() => { if (!guardando) onCerrar() }} ancho>
       <div className="fila">
         <Campo className="auto" label="Fecha" tipo="date" valor={c.fecha} onCambio={(v) => set('fecha', v)} />
         <Selector label="Proveedor" valor={c.proveedorId} onCambio={(v) => set('proveedorId', v)} vacio="Sin proveedor"
           opciones={proveedores.map((x) => ({ value: x.id, label: x.nombre }))} />
         <Campo label="Referencia" valor={c.referencia} onCambio={(v) => set('referencia', v)} placeholder="N.º de factura…" />
+        <Selector label="Moneda de la factura" valor={c.monedaFactura} onCambio={v => set('monedaFactura', v)} opciones={monedas} />
       </div>
       <div className="subtabla">
         <h4>Materiales comprados</h4>
@@ -333,34 +360,49 @@ function CompraForm({ productos, config, onCerrar }) {
           const p = prod(l)
           return (
             <div className="fila" key={i}>
-              <Selector label={i === 0 ? 'Producto' : ''} valor={l.productoId} onCambio={(v) => setLinea(i, 'productoId', v)} vacio="Elegir…"
+              <Selector label="Producto" valor={l.productoId} onCambio={(v) => setLinea(i, 'productoId', v)} vacio="Elegir…"
                 opciones={productos.map((x) => ({ value: x.id, label: x.nombre }))} />
-              <Campo className="angosto" label={i === 0 ? 'Cantidad' : ''} tipo="number" valor={l.cantidad} onCambio={(v) => setLinea(i, 'cantidad', v)} />
-              <Selector className="angosto" label={i === 0 ? 'En' : ''} valor={l.unidad} onCambio={(v) => setLinea(i, 'unidad', v)}
+              <Campo className="angosto" label="Cantidad" tipo="number" valor={l.cantidad} onCambio={(v) => setLinea(i, 'cantidad', v)} />
+              <Selector className="angosto" label="Unidad" valor={l.unidad} onCambio={(v) => setLinea(i, 'unidad', v)}
                 opciones={p && (n(p.factor) || 1) !== 1 ? [{ value: 'compra', label: p.unidadCompra }, { value: 'uso', label: p.unidadUso }] : [{ value: 'compra', label: p?.unidadUso ?? '—' }]} />
-              <Campo className="angosto" label={i === 0 ? 'Pagado ($)' : ''} tipo="number" valor={l.costo} onCambio={(v) => setLinea(i, 'costo', v)} />
+              <Campo className="angosto" label={`Importe (${c.monedaFactura})`} inputMode="decimal"
+                valor={l.costo} onCambio={(v) => setLinea(i, 'costo', v)} />
               <div className="campo auto desglose" style={{ width: 150, textAlign: 'right' }}>
-                {p && cantUso(l) > 0 && l.costo != null && <>+{usd(partes[i])} delivery<br /><strong>{usd((n(l.costo) + partes[i]) / cantUso(l))}</strong> por {p.unidadUso}</>}
+                {calculo && p && cantUso(l) > 0 && (
+                  <><strong>{usd(calculo.lineas[i].costoTotalUsd)}</strong> costo en USD<br />
+                    ${num(calculo.lineas[i].costoTotalUsd / cantUso(l), 4)} por {p.unidadUso}
+                    {calculo.lineas[i].delivery > 0 && <><br />Incluye {importe(calculo.lineas[i].delivery, c.monedaFactura)} de delivery</>}
+                  </>
+                )}
               </div>
-              <div className="campo auto"><button className="peligro mini" disabled={lineas.length === 1} onClick={() => setLineas(lineas.filter((_, j) => j !== i))}>×</button></div>
+              <div className="campo auto"><button className="peligro mini" aria-label={`Quitar material ${i + 1}`}
+                disabled={lineas.length === 1} onClick={() => { setError(''); setLineas(lineas.filter((_, j) => j !== i)) }}>×</button></div>
             </div>
           )
         })}
         <button className="sec mini" onClick={() => setLineas([...lineas, { productoId: '', cantidad: null, unidad: 'compra', costo: null }])}>+ Material</button>
       </div>
       <div className="fila">
-        <Campo label="Delivery / envío de la compra ($)" tipo="number" valor={c.delivery} onCambio={(v) => set('delivery', v)} />
-        <Selector label="Repartir el delivery" valor={c.modo} onCambio={(v) => set('modo', v)}
-          opciones={[{ value: 'costo', label: 'Según lo pagado por cada material' }, { value: 'igual', label: 'En partes iguales' }]} />
+        <Campo label={`Delivery (${c.monedaFactura})`} inputMode="decimal" valor={c.delivery} onCambio={(v) => set('delivery', v)} />
+        {centavosFactura(c.delivery) > 0 && lineas.length > 1 && <Selector label="Repartir el delivery" valor={c.reparto} onCambio={v => set('reparto', v)}
+          opciones={[{ value: 'costo', label: 'Según el importe de cada material' }, { value: 'igual', label: 'En partes iguales' }]} />}
         <SelectorPago valor={c.pagadoCon} onCambio={(v) => set('pagadoCon', v)} metodos={config.metodosPago || []} />
-
+        {requiereMonedaPago(c.pagadoCon) && <Selector label="Moneda del pago" valor={c.monedaPago} vacio="Elige USD o Bs"
+          onCambio={v => set('monedaPago', v)} opciones={monedas} />}
+        {monedaPagoFija && <p className="ayuda">Moneda del pago: <strong>{monedaPagoFija}</strong></p>}
       </div>
-      <TasaOperacion valor={c} fecha={c.fecha} montoUsd={total}
-        opcional={monedaMetodoPago(c.pagadoCon) !== 'Bs'}
-        onCambio={cambios => setC(actual => ({ ...actual, ...cambios }))} />
-      <p className="ayuda">Total de la compra: <strong>{usd(total)}</strong>. El delivery se suma al costo de cada material, así el costo por unidad queda completo.</p>
+      <TasaOperacion valor={c} fecha={c.fecha} opcional={!requiereTasa}
+        onCambio={cambios => { setError(''); setC(actual => ({ ...actual, ...cambios })) }} />
+      {calculo && <div aria-live="polite">
+        <p>Total de la factura: <strong>{importe(calculo.totalFactura, c.monedaFactura)}</strong></p>
+        {c.monedaFactura === 'Bs' && <p>Equivalente en USD: <strong>{usd(calculo.totalUsd)}</strong></p>}
+        {calculo.monedaPago && calculo.monedaPago !== c.monedaFactura && (
+          <p>Importe del pago: <strong>{calculo.monedaPago === 'Bs' ? bs(calculo.totalBs) : usd(calculo.totalUsd)}</strong></p>
+        )}
+      </div>}
+      {error && <p className="pendiente" role="alert">{error}</p>}
       <div className="modal-pie">
-        <button className="sec" onClick={onCerrar}>Cancelar</button>
+        <button className="sec" onClick={onCerrar} disabled={guardando}>Cancelar</button>
         <button onClick={guardar} disabled={guardando}>Registrar compra</button>
       </div>
     </Modal>
