@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, crearPedidoDesdeCotizacion, codigoPedido, duplicarCotizacion } from '../db.js'
 import { escalasInvalidas } from '../lib/escalas-cotizaciones.js'
 import { Avisos, Campo, Selector } from '../components/ui.jsx'
-import ItemEditor, { itemVacio } from '../components/ItemEditor.jsx'
+import ItemEditor from '../components/ItemEditor.jsx'
 import ComparadorCantidades from '../components/ComparadorCantidades.jsx'
 import TasaOperacion from '../components/TasaOperacion.jsx'
 import { useDatosCalculo } from './Plantillas.jsx'
@@ -12,15 +12,7 @@ import { ESTADOS, codigo } from './Cotizaciones.jsx'
 import { calcularCotizacion, avisosCotizacion, faltantesDeCosto } from '../lib/calc.js'
 import { usd, bs, pct, num } from '../lib/format.js'
 import { TIPOS_TASA } from '../lib/tasas-multiples.js'
-
-// Guarda una copia de los números para la lista y el documento impreso.
-export function resumenCalculo(r) {
-  return {
-    total: r.total, totalBs: r.totalBs, subtotal: r.subtotal, envio: r.envio, comision: r.comision, iva: r.iva,
-    costoTotal: r.costoTotal, ganancia: r.ganancia, margenReal: r.margenReal,
-    renglones: r.renglones.map((x) => ({ precio: x.precio, precioUnitario: x.precioUnitario, descuento: x.descuento, descuentoCantidadPct: x.descuentoCantidadPct, umbralCantidad: x.umbralCantidad })),
-  }
-}
+import { itemDesdePlantilla, itemVacio, resumenCalculo } from '../lib/cotizaciones.js'
 
 export default function CotizacionEditor() {
   const { id } = useParams()
@@ -54,8 +46,7 @@ export default function CotizacionEditor() {
 
   function agregar(plantillaId) {
     const p = plantillas.find((x) => x.id === Number(plantillaId))
-    const base = itemVacio()
-    const nuevo = p ? { ...base, ...structuredClone(p), id: undefined, nombre: undefined, cantidad: 1 } : base
+    const nuevo = p ? itemDesdePlantilla(p) : itemVacio()
     set('items', [...c.items, nuevo])
     setAbierto(c.items.length)
   }
