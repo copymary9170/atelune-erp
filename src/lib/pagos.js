@@ -1,5 +1,15 @@
 import { redondear } from './calc.js'
 
+export function centavosMoneda(valor) {
+  let texto = String(valor ?? '').trim()
+  if (/^\d{1,3}(\.\d{3})+,\d{1,2}$/.test(texto)) texto = texto.replaceAll('.', '')
+  if (/^\d{1,3}(,\d{3})+\.\d{1,2}$/.test(texto)) texto = texto.replaceAll(',', '')
+  if (!/^(?:\d+(?:[.,]\d{1,2})?|[.,]\d{1,2})$/.test(texto)) return null
+  const [entero, decimal = ''] = texto.split(/[.,]/)
+  const centavos = Number(entero + decimal.padEnd(2, '0'))
+  return Number.isSafeInteger(centavos) ? centavos : null
+}
+
 export function monedaMetodoPago(metodo) {
   const nombre = String(metodo || '')
   const bolivares = /\b(?:bs|ves|bol[ií]var(?:es)?)\b|\bpago\s*m[oó]vil\b/i.test(nombre)
@@ -26,4 +36,13 @@ export function validarFechaOperacion(fecha) {
   if (typeof fecha !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) ||
       new Date(fecha + 'T00:00:00Z').toJSON()?.slice(0, 10) !== fecha)
     throw new Error('Indica una fecha de operación válida.')
+}
+
+export function detalleTasaOperacion(tasa, fecha, detalle) {
+  return tasa > 0 ? {
+    unidad: 'USD', bsPorUnidad: Number(tasa), usdPorUnidad: 1, ...detalle,
+    fecha: detalle?.fecha || fecha,
+    origen: detalle?.origen || (detalle?.fuenteExterna ? 'referencia externa' : 'manual'),
+    efectivaBsPorUsd: Number(tasa),
+  } : null
 }

@@ -6,6 +6,15 @@ const fechaValida = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) 
   !Number.isNaN(new Date(v + 'T12:00:00Z').getTime()) &&
   new Date(v + 'T12:00:00Z').toISOString().slice(0, 10) === v
 
+export function resumenSaldoPedido(pedido) {
+  const abonos = (pedido.abonos || []).filter(a => !a.anulado)
+  if (importe(pedido.total) === null || abonos.some(a => importe(a.monto) === null)) return null
+  const cobrado = red(abonos.reduce((s, a) => s + a.monto, 0))
+  const total = red(pedido.total)
+  if (![total, cobrado].every(v => Number.isSafeInteger(Math.round(v * 100)))) return null
+  return { total, cobrado, pendiente: red(total - cobrado) }
+}
+
 export function reporteCuentasPorCobrar(pedidos, fechaReferencia) {
   if (!fechaValida(fechaReferencia)) throw new Error('Fecha de referencia inválida.')
   const filas = []
@@ -14,23 +23,20 @@ export function reporteCuentasPorCobrar(pedidos, fechaReferencia) {
   const avisos = []
   for (const p of pedidos || []) {
     if (p.estado === 'cancelado') continue // Los reembolsos requieren conciliación independiente.
-    const total = importe(p.total)
-    const abonos = (p.abonos || []).filter(a => !a.anulado)
-    const invalidos = abonos.filter(a => importe(a.monto) === null)
-    if (total === null || invalidos.length) {
+    const importes = resumenSaldoPedido(p)
+    if (!importes) {
       resumen.casosExcluidos++
       avisos.push('Pedido ' + (p.numero ?? p.id ?? 'sin número') + ': total o abonos inválidos; revisar antes de calcular deuda.')
       continue
     }
-    const cobrado = red(abonos.reduce((s, a) => s + a.monto, 0))
-    const saldo = red(total - cobrado)
+    const saldo = importes.pendiente
     if (saldo < 0) resumen.excesoAbonos = red(resumen.excesoAbonos - saldo)
     if (saldo <= 0) continue
     const entrega = fechaValida(p.fechaEntrega) ? p.fechaEntrega : null
     const tipo = entrega === null ? 'sin_fecha' : entrega < fechaReferencia ? 'vencido' : 'por_vencer'
     const fila = { id: p.id, numero: p.numero, cliente: p.cliente || 'Sin cliente',
       fechaPedido: p.fecha || '', fechaEntrega: entrega, estado: p.estado,
-      total: red(total), cobrado, pendiente: saldo, clasificacion: tipo }
+      ...importes, clasificacion: tipo }
     filas.push(fila)
     resumen.totalPendiente = red(resumen.totalPendiente + saldo)
     resumen.cantidadPendiente++

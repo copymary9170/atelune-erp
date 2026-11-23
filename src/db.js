@@ -3,7 +3,9 @@ import { aplicarMovimiento, calcularCotizacion, consumoPedido, faltantesDeCosto,
 import { prepararDuplicadoCotizacion } from './lib/escalas-cotizaciones.js'
 import { calcularArqueo, resumenMovimientosCaja } from './lib/caja.js'
 import { seleccionarTasa } from './lib/tasas-multiples.js'
-import { congelarConversion, validarFechaOperacion } from './lib/pagos.js'
+import { congelarConversion, detalleTasaOperacion, validarFechaOperacion } from './lib/pagos.js'
+import { calcularCobro } from './lib/cobros.js'
+import { resumenSaldoPedido } from './lib/cuentas-cobrar.js'
 import { borradorCotizacion, calcularCotizacionRapida } from './lib/cotizaciones.js'
 import { calcularCompra } from './lib/compras.js'
 
@@ -356,22 +358,32 @@ export async function guardarArqueoCaja(entrada) {
 }
 
 // ---------- Pedidos ----------
-export async function registrarAbono(pedidoId, { fecha, monto, metodo, tasa, tipoTasa, tasaDetalle, nota }) {
+export async function registrarAbono(pedidoId, datos) {
+  const { fecha, metodo, tasa, tipoTasa, tasaDetalle, nota, banco, idOperacion, saldoEsperado, modo } = datos
   validarFechaOperacion(fecha)
-  const montoUsd = Number(monto)
-  if (!Number.isFinite(montoUsd) || montoUsd <= 0) throw new Error('Indica un monto válido.')
   if (!metodo?.trim()) throw new Error('Selecciona el método de pago.')
-  const montoBs = congelarConversion(montoUsd, tasa, metodo)
   return db.transaction('rw', db.pedidos, async () => {
     const pedido = await db.pedidos.get(pedidoId)
     if (!pedido || pedido.estado === 'cancelado') throw new Error('El pedido no está disponible para recibir pagos.')
-    const pendiente = saldoPedido(pedido)
+    const abonos = pedido.abonos || []
+    if (idOperacion && abonos.some(a => a.idOperacion === idOperacion)) return
+    const resumen = resumenSaldoPedido(pedido)
+    if (!resumen && modo) throw new Error('El pedido tiene importes inválidos. Revisa sus abonos antes de cobrar.')
+    const pendiente = resumen?.pendiente ?? redondear(saldoPedido(pedido))
+    if (modo && pendiente !== saldoEsperado)
+      throw new Error('El saldo cambió mientras registrabas el pago. Revisa el saldo actualizado antes de confirmar.')
+    const montos = modo ? calcularCobro(datos, pendiente) : {
+      monto: Number(datos.monto), montoBs: congelarConversion(datos.monto, tasa, metodo),
+    }
+    if (!Number.isFinite(montos.monto) || !(montos.monto > 0)) throw new Error('Indica un monto válido.')
     const abono = {
-      fecha, monto: montoUsd, metodo, tasa, tipoTasa, tasaDetalle, nota, montoBs,
-      saldoAntes: redondear(pendiente), saldoDespues: redondear(pendiente - montoUsd),
+      ...montos, fecha, metodo, tasa, tipoTasa, tasaDetalle: detalleTasaOperacion(tasa, fecha, tasaDetalle), nota,
+      ...(idOperacion ? { idOperacion } : {}),
+      ...(banco?.trim() ? { banco: banco.trim() } : {}),
+      saldoAntes: pendiente, saldoDespues: redondear(pendiente - montos.monto),
       registradoEn: new Date().toISOString(),
     }
-    await db.pedidos.update(pedidoId, { abonos: [...(pedido.abonos || []), abono] })
+    await db.pedidos.update(pedidoId, { abonos: [...abonos, abono] })
   })
 }
 
@@ -519,11 +531,7 @@ export async function registrarCompra({ lineas, fecha, proveedorId, pagadoCon, r
   validarFechaOperacion(fecha)
   const calculo = calcularCompra({ importes: lineas.map(l => l.importeFactura ?? l.costoTotal),
     delivery, reparto, monedaFactura, pagadoCon, monedaPago, tasa })
-  const detalle = tasa > 0 ? {
-    fecha, unidad: 'USD', bsPorUnidad: Number(tasa), usdPorUnidad: 1, ...tasaDetalle,
-    origen: tasaDetalle?.origen || (tasaDetalle?.fuenteExterna ? 'referencia externa' : 'manual'),
-    efectivaBsPorUsd: Number(tasa),
-  } : null
+  const detalle = detalleTasaOperacion(tasa, fecha, tasaDetalle)
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     for (const [i, l] of lineas.entries()) {
       const compra = calculo.lineas[i]

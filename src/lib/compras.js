@@ -1,15 +1,7 @@
-import { monedaMetodoPago } from './pagos.js'
+import { centavosMoneda as centavosFactura, monedaMetodoPago } from './pagos.js'
 
 const monedas = ['USD', 'Bs']
-export function centavosFactura(valor) {
-  let texto = String(valor ?? '').trim()
-  if (/^\d{1,3}(\.\d{3})+,\d{1,2}$/.test(texto)) texto = texto.replaceAll('.', '')
-  if (/^\d{1,3}(,\d{3})+\.\d{1,2}$/.test(texto)) texto = texto.replaceAll(',', '')
-  if (!/^(?:\d+(?:[.,]\d{1,2})?|[.,]\d{1,2})$/.test(texto)) return null
-  const [entero, decimal = ''] = texto.split(/[.,]/)
-  const centavos = Number(entero + decimal.padEnd(2, '0'))
-  return Number.isSafeInteger(centavos) ? centavos : null
-}
+export { centavosFactura }
 
 const enCentavos = (valor, mensaje) => {
   const centavos = centavosFactura(valor)
@@ -56,7 +48,7 @@ export function calcularCompra({ importes, delivery, reparto, monedaFactura, pag
   const costos = importes.map(importe => enCentavos(importe, 'Escribe el importe de cada material con hasta dos decimales.'))
   const envio = enCentavos(delivery === '' ? 0 : delivery ?? 0, 'Escribe el delivery con hasta dos decimales.')
   const partes = repartirCentavos(costos, envio, reparto === 'igual')
-  let factura = 0, usdPrevio = 0, bsPrevio = 0
+  let factura = 0, usdPrevio = 0, bsPrevio = usaTasa ? 0 : null
 
   // Las diferencias se asignan entre renglones sobre el total acumulado.
   // Así los renglones en cada moneda suman exactamente el total convertido.
