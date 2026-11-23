@@ -26,6 +26,16 @@ test('factura y pago se convierten independientemente en las cuatro combinacione
   }
 })
 
+test('totalBs distingue una conversión ausente de un total convertido de cero', () => {
+  const base = { monedaFactura: 'USD', pagadoCon: 'Efectivo $', importes: [10, 20] }
+  for (const tasa of [undefined, null, '']) {
+    const compra = calcularCompra({ ...base, tasa })
+    assert.equal(compra.totalBs, null)
+    assert.ok(compra.lineas.every(l => l.equivalenteBs === null))
+  }
+  assert.equal(calcularCompra({ ...base, importes: [0], tasa: 40 }).totalBs, 0)
+})
+
 test('un pago genérico necesita moneda y las operaciones en Bs necesitan una conversión explícita', () => {
   const base = { monedaFactura: 'USD', pagadoCon: 'Transferencia', importes: [10] }
   assert.throws(() => calcularCompra(base), /moneda|pago/)
