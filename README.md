@@ -232,3 +232,11 @@ Estado: **preparado en rama de revisión; no activo hasta instalar la migración
 - Las tasas de operaciones antiguas permanecen congeladas. La tabla de referencias automáticas compartidas es distinta de cotizaciones, pedidos y abonos personales, y no modifica los registros existentes.
 - Proveedores inaccesibles, claves ausentes, cifras fuera de rango o referencias antiguas no generan tasas supuestas. Los errores de ejecución deben revisarse en Vercel.
 - El cron indica `sin_clave` para fuentes opcionales deshabilitadas, `parcial` si solo algunas fuentes configuradas aportan referencias y HTTP 502 si ninguna aporta datos válidos o falla la inserción. `recibidas` incluye duplicados que Supabase ignora.
+
+## Confirmación de cobros en la nube
+
+En modo nube, el intento se conserva en el dispositivo hasta que Supabase confirma su identificador. El saldo no se reduce localmente al dejar un intento pendiente. Usa **Reintentar confirmación** para recuperar la misma operación si se pierde la respuesta. Si cambia la versión compartida, revisa el saldo antes de registrar otro intento.
+
+Antes de habilitar el flujo, aplica `supabase/cobros_confirmados.sql` después de `supabase/esquema.sql` en un proyecto de ensayo. Prueba con dos sesiones de la misma cuenta y dos bases locales independientes. Comprueba una única confirmación, un rechazo por saldo o versión, la reanudación tras perder la respuesta y una anulación con su historial intacto. La migración bloquea los cambios directos a los abonos a través de la sincronización de copias, incluidos los intentos de clientes anteriores a este flujo.
+
+Coordina la actualización de los dispositivos con la aplicación del SQL. Antes de actualizar, respalda y concilia cualquier abono pendiente de los clientes anteriores. Si se detectan diferencias financieras entre copias, conserva los respaldos para conciliarlas. La fecha contable de las nuevas operaciones se calcula en Caracas y los registros históricos conservan las fechas guardadas.

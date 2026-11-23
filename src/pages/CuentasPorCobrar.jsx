@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { codigoPedido, db } from '../db.js'
 import AbonoForm from '../components/AbonoForm.jsx'
+import CobrosPendientes from '../components/CobrosPendientes.jsx'
+import { mensajeOperacion } from '../nube.js'
 import { Campo, useConfig } from '../components/ui.jsx'
 import { usd, fecha, hoy } from '../lib/format.js'
 import { reporteCuentasPorCobrar } from '../lib/cuentas-cobrar.js'
@@ -53,6 +55,7 @@ export default function CuentasPorCobrar() {
         <Link className="boton sec" to="/pedidos">Ver pedidos</Link>
       </div>
       {mensaje && <p role="status">{mensaje}</p>}
+      <CobrosPendientes pedidos={pedidos || []} />
       <div className="tarjeta cxc-filtros">
         <div className="fila">
           <Campo label="Fecha de referencia" tipo="date" valor={dia} onCambio={setDia} />
@@ -120,7 +123,7 @@ export default function CuentasPorCobrar() {
         </div>
       </>}
       {pedido && <AbonoForm key={pedido.id} pedido={pedido} metodos={config.metodosPago || []} rapido
-        onCerrar={() => setPedidoId(null)} onGuardado={() => setMensaje('Cobro registrado en ' + codigoPedido(pedido.numero) + '.')} />}
+        onCerrar={() => setPedidoId(null)} onGuardado={estado => setMensaje(codigoPedido(pedido.numero) + ' · ' + mensajeOperacion[estado])} />}
     </div>
   )
 }

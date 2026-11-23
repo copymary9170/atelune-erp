@@ -8,6 +8,7 @@ import { calcularCobro } from './lib/cobros.js'
 import { resumenSaldoPedido } from './lib/cuentas-cobrar.js'
 import { borradorCotizacion, calcularCotizacionRapida } from './lib/cotizaciones.js'
 import { calcularCompra } from './lib/compras.js'
+import { fechaContable, hoy } from './lib/format.js'
 
 // Base de datos local (IndexedDB, dentro del navegador).
 // Toda la lógica de datos pasa por este archivo para poder migrar
@@ -50,6 +51,7 @@ instancia.version(3).stores({
 instancia.version(4).stores({
   cajaArqueos: '++id, fecha, metodo, [fecha+metodo]',
 })
+instancia.version(5).stores({ cobrosPendientes: 'pedidoId' })
   return instancia
 }
 
@@ -122,7 +124,7 @@ export async function tasaVigente(tipo = 'bcv_usd', fechaMax = '9999-12-31') {
 
 // ---------- Inventario ----------
 
-export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen, tasa, tasaDetalle, compra }) {
+export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen, tasa, tasaDetalle, compra, registradoEn = new Date().toISOString() }) {
   if (fecha != null) validarFechaOperacion(fecha)
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     const p = await db.productos.get(productoId)
@@ -136,7 +138,8 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
       tipo,
       cantidad: Number(cantidad),
       costoUnitario: tipo === 'entrada' ? Number(costoUnitario) : p.costoPromedio,
-      fecha: fecha || new Date().toISOString().slice(0, 10),
+      fecha: fecha || fechaContable(registradoEn),
+      registradoEn,
       referencia: referencia || '',
       nota: nota || '',
       pedidoId: pedidoId ?? null,
@@ -328,7 +331,7 @@ export async function duplicarCotizacion(id) {
     const origen = await db.cotizaciones.get(Number(id))
     if (!origen) throw new Error('Cotización original no encontrada.')
     const numero = await siguienteNumeroCotizacion()
-    const fecha = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+    const fecha = hoy()
     return db.cotizaciones.add(prepararDuplicadoCotizacion(origen, numero, fecha))
   })
 }
@@ -358,32 +361,48 @@ export async function guardarArqueoCaja(entrada) {
 }
 
 // ---------- Pedidos ----------
-export async function registrarAbono(pedidoId, datos) {
+export function prepararAbono(pedido, datos) {
   const { fecha, metodo, tasa, tipoTasa, tasaDetalle, nota, banco, idOperacion, saldoEsperado, modo } = datos
   validarFechaOperacion(fecha)
   if (!metodo?.trim()) throw new Error('Selecciona el método de pago.')
+  if (!pedido || pedido.estado === 'cancelado') throw new Error('El pedido no está disponible para recibir pagos.')
+  const resumen = resumenSaldoPedido(pedido)
+  if (!resumen && modo) throw new Error('El pedido tiene importes inválidos. Revisa sus abonos antes de cobrar.')
+  const pendiente = resumen?.pendiente ?? redondear(saldoPedido(pedido))
+  if (modo && pendiente !== saldoEsperado)
+    throw new Error('El saldo cambió mientras registrabas el pago. Revisa el saldo actualizado antes de confirmar.')
+  const montos = modo ? calcularCobro(datos, pendiente) : {
+    monto: Number(datos.monto), montoBs: congelarConversion(datos.monto, tasa, metodo),
+  }
+  if (!Number.isFinite(montos.monto) || !(montos.monto > 0)) throw new Error('Indica un monto válido.')
+  return {
+    ...montos, fecha, metodo, tasa, tipoTasa, tasaDetalle: detalleTasaOperacion(tasa, fecha, tasaDetalle), nota,
+    ...(idOperacion ? { idOperacion } : {}),
+    ...(banco?.trim() ? { banco: banco.trim() } : {}),
+    saldoAntes: pendiente, saldoDespues: redondear(pendiente - montos.monto),
+    registradoEn: new Date().toISOString(),
+  }
+}
+
+export async function registrarAbono(pedidoId, datos) {
   return db.transaction('rw', db.pedidos, async () => {
     const pedido = await db.pedidos.get(pedidoId)
-    if (!pedido || pedido.estado === 'cancelado') throw new Error('El pedido no está disponible para recibir pagos.')
-    const abonos = pedido.abonos || []
-    if (idOperacion && abonos.some(a => a.idOperacion === idOperacion)) return
-    const resumen = resumenSaldoPedido(pedido)
-    if (!resumen && modo) throw new Error('El pedido tiene importes inválidos. Revisa sus abonos antes de cobrar.')
-    const pendiente = resumen?.pendiente ?? redondear(saldoPedido(pedido))
-    if (modo && pendiente !== saldoEsperado)
-      throw new Error('El saldo cambió mientras registrabas el pago. Revisa el saldo actualizado antes de confirmar.')
-    const montos = modo ? calcularCobro(datos, pendiente) : {
-      monto: Number(datos.monto), montoBs: congelarConversion(datos.monto, tasa, metodo),
-    }
-    if (!Number.isFinite(montos.monto) || !(montos.monto > 0)) throw new Error('Indica un monto válido.')
-    const abono = {
-      ...montos, fecha, metodo, tasa, tipoTasa, tasaDetalle: detalleTasaOperacion(tasa, fecha, tasaDetalle), nota,
-      ...(idOperacion ? { idOperacion } : {}),
-      ...(banco?.trim() ? { banco: banco.trim() } : {}),
-      saldoAntes: pendiente, saldoDespues: redondear(pendiente - montos.monto),
-      registradoEn: new Date().toISOString(),
-    }
+    const abonos = pedido?.abonos || []
+    if (datos.idOperacion && abonos.some(a => a.idOperacion === datos.idOperacion)) return
+    const abono = prepararAbono(pedido, datos)
     await db.pedidos.update(pedidoId, { abonos: [...abonos, abono] })
+  })
+}
+
+export async function anularAbonoLocal(pedidoId, indice, anterior, motivo) {
+  return db.transaction('rw', db.pedidos, async () => {
+    const pedido = await db.pedidos.get(pedidoId)
+    const abonos = [...(pedido?.abonos || [])]
+    if (!abonos[indice] || abonos[indice].anulado ||
+        JSON.stringify(abonos[indice]) !== JSON.stringify(anterior)) throw new Error('El abono cambió.')
+    abonos[indice] = { ...abonos[indice], anulado: true, motivoAnulacion: motivo.trim().slice(0,300),
+      fechaAnulacion: new Date().toISOString() }
+    await db.pedidos.update(pedidoId, { abonos })
   })
 }
 
@@ -417,7 +436,8 @@ export async function crearPedidoDesdeCotizacion(cotId) {
     const datosCalc = { productos: await db.productos.toArray(), activos: await db.activos.toArray(), config }
     const calc = calcularCotizacion(cot, datosCalc)
     const ultimo = await db.pedidos.orderBy('numero').last()
-    const hoyIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+    const registradoEn = new Date().toISOString()
+    const hoyIso = fechaContable(registradoEn)
     const id = await db.pedidos.add({
       numero: (ultimo?.numero ?? 0) + 1,
       fecha: hoyIso,
@@ -432,6 +452,8 @@ export async function crearPedidoDesdeCotizacion(cotId) {
       // Regla de reparto congelada al crear el pedido: cambiar la regla general no altera pedidos anteriores.
       reparto: structuredClone(reglaGeneral(config)),
       costoIncompleto: faltantesDeCosto(cot, datosCalc),
+      costosUnitariosPresupuesto: Object.fromEntries(consumoPedido(cot.items, config).map(({ productoId }) =>
+        [productoId, datosCalc.productos.find(p => p.id === productoId)?.costoPromedio ?? null])),
       total: calc.total,
       subtotal: calc.subtotal,
       envio: calc.envio,
@@ -444,7 +466,7 @@ export async function crearPedidoDesdeCotizacion(cotId) {
       metodoPagoIdx: cot.metodoPagoIdx,
       abonos: [],
       inventarioDescontado: false,
-      historial: [{ fecha: new Date().toISOString(), estado: 'aprobado' }],
+      historial: [{ fecha: registradoEn, fechaContable: hoyIso, estado: 'aprobado' }],
       notas: cot.notas || '',
     })
     await db.cotizaciones.update(cot.id, { estado: 'aprobada' })
@@ -461,11 +483,13 @@ export async function cambiarEstadoPedido(id, estado, { devolverInventario = fal
     if (p.estado === 'cancelado' && estado !== 'cancelado') throw new Error('Un pedido cancelado no puede reactivarse automáticamente.')
     const config = await getConfig()
     const ref = codigoPedido(p.numero)
+    const registradoEn = new Date().toISOString()
+    const dia = fechaContable(registradoEn)
     let descontado = !!p.inventarioDescontado
     if (ESTADOS_CON_CONSUMO.includes(estado) && !descontado) {
       for (const c of consumoPedido(p.items, config)) {
         if (await db.productos.get(c.productoId))
-          await registrarMovimiento({ productoId: c.productoId, tipo: 'salida', cantidad: c.cantidad, referencia: ref, nota: 'Consumo de producción', pedidoId: id, origen: 'consumo_produccion' })
+          await registrarMovimiento({ productoId: c.productoId, tipo: 'salida', cantidad: c.cantidad, fecha: dia, registradoEn, referencia: ref, nota: 'Consumo de producción', pedidoId: id, origen: 'consumo_produccion' })
       }
       descontado = true
     }
@@ -474,7 +498,7 @@ export async function cambiarEstadoPedido(id, estado, { devolverInventario = fal
       const salidas = await db.movimientos.where('pedidoId').equals(id).filter((m) => m.tipo === 'salida' && !m.devuelto && (m.origen === 'consumo_produccion' || (!m.origen && m.nota === 'Consumo de producción' && m.referencia === ref))).toArray()
       for (const m of salidas) {
         if (await db.productos.get(m.productoId))
-          await registrarMovimiento({ productoId: m.productoId, tipo: 'entrada', cantidad: m.cantidad, costoUnitario: m.costoUnitario, referencia: ref, nota: 'Devolución por cancelación', pedidoId: id, origen: 'reversion_consumo' })
+          await registrarMovimiento({ productoId: m.productoId, tipo: 'entrada', cantidad: m.cantidad, costoUnitario: m.costoUnitario, fecha: dia, registradoEn, referencia: ref, nota: 'Devolución por cancelación', pedidoId: id, origen: 'reversion_consumo' })
         await db.movimientos.update(m.id, { devuelto: true })
       }
       descontado = false
@@ -482,7 +506,7 @@ export async function cambiarEstadoPedido(id, estado, { devolverInventario = fal
     await db.pedidos.update(id, {
       estado,
       inventarioDescontado: descontado,
-      historial: [...(p.historial || []), { fecha: new Date().toISOString(), estado, ...(estado === 'cancelado' ? { devolucionInventario: devolverInventario && !descontado ? 'devueltos' : descontado ? 'no_devueltos' : 'sin_consumo' } : {}) }],
+      historial: [...(p.historial || []), { fecha: registradoEn, fechaContable: dia, estado, ...(estado === 'cancelado' ? { devolucionInventario: devolverInventario && !descontado ? 'devueltos' : descontado ? 'no_devueltos' : 'sin_consumo' } : {}) }],
     })
   })
 }

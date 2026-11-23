@@ -8,6 +8,8 @@
 // Reportes de gestión interna: deben validarse con un contador.
 
 import { n, depreciacionMensual, mesesTranscurridos } from './calc.js'
+import { fechaContable } from './format.js'
+import { fechaEntregaPedido } from './reporte-rentabilidad.js'
 
 export const CATEGORIAS_GASTO = [
   'Electricidad', 'Internet y teléfono', 'Alquiler', 'Software y suscripciones', 'Publicidad',
@@ -66,9 +68,7 @@ const r2 = (v) => Math.round((n(v) + Number.EPSILON) * 100) / 100
 
 /** Fecha local AAAA-MM-DD de una marca ISO. */
 export function fechaLocal(iso) {
-  const d = new Date(iso)
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
-  return d.toISOString().slice(0, 10)
+  return fechaContable(iso)
 }
 
 function ultimoDiaMes(anio, mes0) {
@@ -113,8 +113,7 @@ export function generarAsientos(datos, hasta = new Date()) {
   // Pedidos: ventas (al entregar) y cobros.
   for (const p of pedidos) {
     const cod = 'PED-' + String(p.numero).padStart(4, '0')
-    const entregaH = p.estado === 'entregado' ? [...(p.historial || [])].reverse().find((h) => h.estado === 'entregado') : null
-    const fEntrega = entregaH ? fechaLocal(entregaH.fecha) : null
+    const fEntrega = fechaEntregaPedido(p)
 
     // En días iguales la venta va antes que los cobros (el orden se conserva al ordenar por fecha).
     const anticipos = (p.abonos || []).filter((a) => !a.anulado && !(fEntrega && a.fecha >= fEntrega)).reduce((s, a) => s + n(a.monto), 0)
@@ -222,7 +221,7 @@ export function generarAsientos(datos, hasta = new Date()) {
   // Activos: compra y depreciación mensual (al cierre de cada mes completo).
   for (const a of activos) {
     const origen = { tipo: 'activo', id: a.id }
-    const fCompra = a.fechaCompra || fechaLocal(new Date().toISOString())
+    const fCompra = a.fechaCompra || fechaContable()
     push(asiento(fCompra, 'Compra de equipo: ' + a.nombre, origen, [
       { cuenta: '1.2.01', debe: a.costo },
       { cuenta: cuentaPago(a.pagadoCon), haber: a.costo },
@@ -312,6 +311,21 @@ export function estadoResultados(asientos, config, desde, hasta) {
     totalIngresos: tot(ingresos), totalCostos: tot(costos), totalGastos: tot(gastos),
     utilidadBruta, utilidadNeta: utilidadBruta - tot(gastos),
   }
+}
+
+/** Resultado bruto de los asientos atribuibles al pedido. */
+export function utilidadContablePedido(pedido, movimientos) {
+  if (!fechaEntregaPedido(pedido) || !movimientos) return null
+  const vinculados = movimientos.filter(m => m.pedidoId === pedido.id)
+  const r = estadoResultados(generarAsientos({ pedidos: [pedido], movimientos: vinculados }), {})
+  const salidas = vinculados.filter(m => m.tipo === 'salida')
+  const unitarios = pedido.costosUnitariosPresupuesto
+  const puedeComparar = unitarios && salidas.length &&
+    salidas.every(m => Number.isFinite(unitarios[m.productoId]) && Number.isFinite(m.costoUnitario))
+  const variacionPromedio = puedeComparar ? r2(salidas.reduce((total, m) =>
+    total + (m.costoUnitario - unitarios[m.productoId]) * m.cantidad, 0)) : null
+  return { utilidad: r.utilidadBruta, ingresos: r.totalIngresos, costo: r.totalCostos, variacionPromedio,
+    sinConsumo: salidas.length === 0 }
 }
 
 /** Balance general a una fecha. La utilidad acumulada se muestra dentro del patrimonio. */

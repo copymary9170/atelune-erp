@@ -2,6 +2,8 @@
 // Ingresos de trabajos = subtotal, sin delivery, recargos ni IVA.
 // Costos y utilidad son los PRESUPUESTADOS congelados en cada pedido.
 // No equivalen a utilidad fiscal, beneficio neto del negocio ni efectivo cobrado.
+import { fechaContable } from './format.js'
+
 const numero = x => typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : null
 const red = v => Math.round((v + Number.EPSILON) * 100) / 100
 
@@ -19,15 +21,14 @@ export function fechaEntregaPedido(pedido) {
   const historial = Array.isArray(pedido.historial) ? pedido.historial : []
   const h = [...historial].reverse().find(e => e?.estado === 'entregado' && e.fecha)
   if (!h || typeof h.fecha !== 'string') return null
+  if (fechaValida(h.fechaContable)) return h.fechaContable
   if (/^\d{4}-\d{2}-\d{2}$/.test(h.fecha)) return fechaValida(h.fecha) ? h.fecha : null
   // Rechazar fechas imposibles en el origen; Date puede normalizar 30/feb a marzo.
   const prefijo = /^\d{4}-\d{2}-\d{2}/.exec(h.fecha)?.[0]
   if (!prefijo || !fechaValida(prefijo)) return null
   // Convertir el timestamp al día local igual que Contabilidad y la interfaz.
   // Esto evita desplazar entregas cerca de medianoche a un mes equivocado.
-  const d = new Date(h.fecha)
-  if (Number.isNaN(d.getTime())) return null
-  const local = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+  const local = fechaContable(h.fecha)
   return fechaValida(local) ? local : null
 }
 

@@ -9,6 +9,8 @@ import FlujoProduccion from '../components/FlujoProduccion.jsx'
 import TiemposProduccion from '../components/TiemposProduccion.jsx'
 import FichaRentabilidad from '../components/FichaRentabilidad.jsx'
 import AbonoForm from '../components/AbonoForm.jsx'
+import CobrosPendientes from '../components/CobrosPendientes.jsx'
+import { guardarAnulacion, mensajeOperacion } from '../nube.js'
 import ConsumoMateriales from '../components/ConsumoMateriales.jsx'
 import { consumoPedido, saldoPedido, totalAbonos, n } from '../lib/calc.js'
 import { usd, bs, num, fecha, hoy } from '../lib/format.js'
@@ -89,10 +91,12 @@ export function PedidoDetalle() {
   const navigate = useNavigate()
   const p = useLiveQuery(() => db.pedidos.get(Number(id)).then((x) => x ?? null), [id])
   const productos = useLiveQuery(() => db.productos.toArray(), [], [])
+  const movimientosPedido = useLiveQuery(() => db.movimientos.where('pedidoId').equals(Number(id)).toArray(), [id])
   const cot = useLiveQuery(() => (p?.cotizacionId ? db.cotizaciones.get(p.cotizacionId) : undefined), [p?.cotizacionId])
   const config = useConfig()
   const [abonando, setAbonando] = useState(false)
   const [ocupado, setOcupado] = useState(false)
+  const [mensajePago, setMensajePago] = useState('')
 
   if (p === undefined) return <p className="muted">Cargando…</p>
   if (p === null) return <p>No se encontró el pedido.</p>
@@ -100,6 +104,16 @@ export function PedidoDetalle() {
   const saldo = resumenSaldoPedido(p)?.pendiente ?? saldoPedido(p)
   const consumo = consumoPedido(p.items, config)
   const actualizar = (cambios) => db.pedidos.update(p.id, cambios)
+
+  async function anular(indice, abono) {
+    const motivo = prompt('Motivo de anulación del pago:')
+    if (!motivo?.trim()) return
+    try {
+      setMensajePago(mensajeOperacion[await guardarAnulacion(p.id, indice, abono, motivo)])
+    } catch (error) {
+      setMensajePago(error.message)
+    }
+  }
 
   async function mover(estado) {
     if (estado === p.estado) return
@@ -178,6 +192,8 @@ export function PedidoDetalle() {
             <h2>Pagos</h2>
             {p.estado !== 'cancelado' && <button className="mini" onClick={() => setAbonando(true)}>+ Registrar pago</button>}
           </div>
+          <CobrosPendientes pedido={p} />
+          {mensajePago && <p role="status">{mensajePago}</p>}
           <table>
             <tbody>
               {(p.abonos || []).map((a, i) => (
@@ -199,7 +215,7 @@ export function PedidoDetalle() {
                       {a.saldoDespues < 0 ? 'Excedente al registrar: ' : 'Saldo al registrar: '}{usd(Math.abs(a.saldoDespues))}
                     </div>}
                   </td>
-                  <td className="num">{!a.anulado && <button className="peligro mini" onClick={async () => { const motivo = prompt('Motivo de anulación del pago:'); if (!motivo?.trim()) return; await db.transaction('rw',db.pedidos,async () => { const actual = await db.pedidos.get(p.id); const abonos = [...(actual.abonos || [])]; if (abonos[i]?.anulado) return; abonos[i] = {...abonos[i], anulado:true, motivoAnulacion:motivo.trim().slice(0,300), fechaAnulacion:new Date().toISOString()}; await db.pedidos.update(p.id,{abonos}) }) }}>Anular</button>}</td>
+                  <td className="num">{!a.anulado && <button className="peligro mini" onClick={() => anular(i, a)}>Anular</button>}</td>
                 </tr>
               ))}
               {!p.abonos?.length && <tr><td className="vacio">Aún no hay pagos.</td></tr>}
@@ -217,7 +233,7 @@ export function PedidoDetalle() {
       <FlujoProduccion pedido={p} />
       <TiemposProduccion pedido={p} />
       <ConsumoMateriales pedido={p} productos={productos} />
-      <FichaRentabilidad pedido={p} />
+      <FichaRentabilidad pedido={p} movimientos={movimientosPedido} />
 
       <RepartoPedido pedido={p} config={config} />
 
@@ -225,12 +241,13 @@ export function PedidoDetalle() {
         <h3>Historial</h3>
         <div className="desglose">
           {(p.historial || []).map((h, i) => (
-            <div key={i}>{new Date(h.fecha).toLocaleString('es-VE')} — {ESTADOS_PEDIDO[h.estado]}</div>
+            <div key={i}>{new Date(h.fecha).toLocaleString('es-VE', { timeZone: 'America/Caracas' })} — {ESTADOS_PEDIDO[h.estado]}</div>
           ))}
         </div>
       </div>
 
-      {abonando && <AbonoForm pedido={p} metodos={config.metodosPago || []} onCerrar={() => setAbonando(false)} />}
+      {abonando && <AbonoForm pedido={p} metodos={config.metodosPago || []} onCerrar={() => setAbonando(false)}
+        onGuardado={estado => setMensajePago(mensajeOperacion[estado])} />}
     </>
   )
 }

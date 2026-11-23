@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from 'react'
-import { codigoPedido, registrarAbono } from '../db.js'
+import { codigoPedido } from '../db.js'
+import { guardarCobro } from '../nube.js'
 import { calcularCobro } from '../lib/cobros.js'
 import { resumenSaldoPedido } from '../lib/cuentas-cobrar.js'
 import { bs, fecha, hoy, usd } from '../lib/format.js'
@@ -62,8 +63,8 @@ export default function AbonoForm({ pedido, metodos, rapido = false, onCerrar, o
     setError('')
     try {
       operacion.current ||= crypto.randomUUID()
-      await registrarAbono(pedido.id, { ...datos, idOperacion: operacion.current })
-      onGuardado?.()
+      const estado = await guardarCobro(pedido.id, { ...datos, idOperacion: operacion.current })
+      onGuardado?.(estado)
       onCerrar()
     } catch (e) {
       setError(e.message)

@@ -2,12 +2,14 @@ import { fichaRentabilidad } from '../lib/rentabilidad.js'
 import { tiempoLegible } from '../lib/tiempos.js'
 import { usd } from '../lib/format.js'
 import { resumenMateriales } from '../lib/merma.js'
+import { utilidadContablePedido } from '../lib/contabilidad.js'
 
 const monto = v => v == null ? 'Sin datos' : usd(v)
 
-export default function FichaRentabilidad({ pedido }) {
+export default function FichaRentabilidad({ pedido, movimientos }) {
   const r = fichaRentabilidad(pedido)
   const m = resumenMateriales(pedido)
+  const contable = utilidadContablePedido(pedido, movimientos)
   return <section className="tarjeta">
     <h2>Ficha de rentabilidad del pedido</h2>
     <p className="muted">Comparación entre el presupuesto guardado al crear el pedido y la mano de obra registrada. No se modifican ventas, caja, inventario, reparto ni contabilidad. Los materiales, máquinas, merma y costos fijos siguen siendo presupuestados.</p>
@@ -17,6 +19,19 @@ export default function FichaRentabilidad({ pedido }) {
       <div className="kpi"><div className="etiqueta">Utilidad presupuestada</div><div className="valor">{monto(r.gananciaPresupuestada)}</div></div>
       <div className="kpi"><div className="etiqueta">Tiempo anotado</div><div className="valor">{tiempoLegible(r.minutosRegistrados)}</div></div>
     </div>
+    <h3>Presupuesto y utilidad bruta contable</h3>
+    {contable ? <>
+      <div className="fila">
+        <strong>Utilidad bruta contable: {usd(contable.utilidad)}</strong>
+        {r.gananciaPresupuestada != null && <strong>Diferencia frente al presupuesto: {usd(contable.utilidad - r.gananciaPresupuestada)}</strong>}
+      </div>
+      <p>Ingresos contabilizados: {usd(contable.ingresos)}. Costo contabilizado: {usd(contable.costo)}.</p>
+      {contable.variacionPromedio != null && contable.variacionPromedio !== 0 &&
+        <p>El costo promedio al consumir los materiales {contable.variacionPromedio > 0 ? 'aumentó' : 'redujo'} su costo en {usd(Math.abs(contable.variacionPromedio))} frente al costo unitario presupuestado para la misma cantidad.</p>}
+      {contable.sinConsumo && <p className="ayuda">No hay salidas vinculadas a este pedido.</p>}
+      {contable.variacionPromedio == null && !contable.sinConsumo && <p className="ayuda">No se conservó un costo unitario de referencia para todos los materiales consumidos.</p>}
+      <p className="ayuda">La diferencia también puede incluir recargos, envío y partidas presupuestadas que no figuran como costo de ventas.</p>
+    </> : <p className="ayuda">Disponible después de registrar la entrega y cargar sus movimientos.</p>}
     <h3>Materiales observados · dato separado</h3>
     <p className="muted">Costo registrado de materiales útiles y desperdiciados: <strong>{usd(m.valorConocido)}</strong>. {m.costoIncompleto ? `${m.costoIncompleto} registro(s) sin costo.` : ''} {m.trabajosSinRegistros ? `${m.trabajosSinRegistros} trabajo(s) sin registro.` : ''} No se añade a la proyección ajustada para evitar duplicar los costos de materiales ya incluidos en el presupuesto. Los materiales observados no garantizan consumo completo.</p>
     <h3>Mano de obra · presupuesto frente a lo anotado</h3>
