@@ -3,9 +3,9 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, registrarMovimiento, registrarCompra, TIPOS_PRODUCTO, UNIDADES } from '../db.js'
 import { Campo, Modal, Selector, SelectorPago, useConfig } from '../components/ui.jsx'
 import { n, repartirDelivery } from '../lib/calc.js'
-import { monedaEfectivo } from '../lib/caja.js'
+import { equivalenteBs, monedaMetodoPago } from '../lib/pagos.js'
 import TasaOperacion from '../components/TasaOperacion.jsx'
-import { usd, num, fecha, hoy } from '../lib/format.js'
+import { usd, bs, num, fecha, hoy } from '../lib/format.js'
 
 const opcionesTipo = Object.entries(TIPOS_PRODUCTO).map(([value, label]) => ({ value, label }))
 const opcionesUnidad = UNIDADES.map((u) => ({ value: u, label: u }))
@@ -198,17 +198,20 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
     if (tipo !== 'ajuste' && !(cantUso > 0)) return alert('Escribe una cantidad mayor que 0.')
     if (tipo === 'ajuste' && (cantidad == null || cantidad < 0)) return alert('Escribe el stock contado.')
     if (tipo === 'entrada' && costoTotal == null) return alert('Escribe cuánto pagaste en total.')
-    if (tipo === 'entrada' && (monedaEfectivo(pagadoCon) === 'Bs' || /pago\s*m[oó]vil/i.test(pagadoCon)) && !(Number(tasaMov.tasa) > 0)) return alert('Indica la tasa aplicada al pago en Bs.')
-    await registrarMovimiento({
-      productoId: p.id, tipo, cantidad: cantUso,
-      costoUnitario: tipo === 'entrada' ? n(costoTotal) / cantUso : undefined,
-      fecha: f, referencia, nota,
-      proveedorId: tipo === 'entrada' && proveedorId ? Number(proveedorId) : null,
-      pagadoCon: tipo === 'entrada' ? pagadoCon || null : null,
-      tasa: tipo === 'entrada' ? tasaMov.tasa : null,
-      tasaDetalle: tipo === 'entrada' ? tasaMov.tasaDetalle : null,
-    })
-    onCerrar()
+    try {
+      await registrarMovimiento({
+        productoId: p.id, tipo, cantidad: cantUso,
+        costoUnitario: tipo === 'entrada' ? n(costoTotal) / cantUso : undefined,
+        fecha: f, referencia, nota,
+        proveedorId: tipo === 'entrada' && proveedorId ? Number(proveedorId) : null,
+        pagadoCon: tipo === 'entrada' ? pagadoCon || null : null,
+        tasa: tipo === 'entrada' ? tasaMov.tasa : null,
+        tasaDetalle: tipo === 'entrada' ? tasaMov.tasaDetalle : null,
+      })
+      onCerrar()
+    } catch (error) {
+      alert(error.message)
+    }
   }
 
   return (
@@ -235,7 +238,7 @@ function MovimientoForm({ producto: p, tipo: tipoInicial, onCerrar }) {
       )}
       {tipo === 'entrada' && <SelectorPago valor={pagadoCon} onCambio={setPagadoCon} metodos={config.metodosPago || []} />}
       {tipo === 'entrada' && <TasaOperacion valor={tasaMov} fecha={f} montoUsd={costoTotal}
-        opcional={!(monedaEfectivo(pagadoCon) === 'Bs' || /pago\s*m[oó]vil/i.test(pagadoCon))}
+        opcional={monedaMetodoPago(pagadoCon) !== 'Bs'}
         onCambio={cambios => setTasaMov(actual => ({ ...actual, ...cambios }))} />}
       <Campo label="Referencia" valor={referencia} onCambio={setReferencia} placeholder="N.º de factura, nota de entrega…" />
       <Campo label="Nota" valor={nota} onCambio={setNota} />
@@ -265,7 +268,11 @@ function Kardex({ producto: p, onCerrar }) {
                 <td className="num">{usd(m.costoUnitario)}</td>
                 <td className="num">{num(m.stockResultante)}</td>
                 <td className="num">{usd(m.costoPromedioResultante)}</td>
-                <td>{m.referencia}{m.nota && <div className="desglose">{m.nota}</div>}</td>
+                <td>{m.referencia}{m.nota && <div className="desglose">{m.nota}</div>}
+                  {m.tipo === 'entrada' && m.tasa > 0 && <div className="desglose">
+                    {bs(m.montoBs ?? equivalenteBs(m.cantidad * m.costoUnitario, m.tasa))} · {num(m.tasa, 4)} Bs/USD
+                  </div>}
+                </td>
               </tr>
             ))}
             {!movs.length && <tr><td colSpan={7} className="vacio">Sin movimientos.</td></tr>}
@@ -282,6 +289,7 @@ function CompraForm({ productos, config, onCerrar }) {
   const proveedores = useLiveQuery(() => db.proveedores.orderBy('nombre').toArray(), [], [])
   const [c, setC] = useState({ fecha: hoy(), proveedorId: '', pagadoCon: '', referencia: '', delivery: null, modo: 'costo', tasa: null, tipoTasa: 'bcv_usd', tasaDetalle: null })
   const [lineas, setLineas] = useState([{ productoId: '', cantidad: null, unidad: 'compra', costo: null }])
+  const [guardando, setGuardando] = useState(false)
   const set = (k, v) => setC((x) => ({ ...x, [k]: v }))
   const setLinea = (i, k, v) => setLineas((ls) => ls.map((l, j) => (j === i ? { ...l, [k]: v } : l)))
   const prod = (l) => productos.find((p) => p.id === Number(l.productoId))
@@ -290,17 +298,25 @@ function CompraForm({ productos, config, onCerrar }) {
   const total = lineas.reduce((s, l) => s + n(l.costo), 0) + n(c.delivery)
 
   async function guardar() {
-    if ((monedaEfectivo(c.pagadoCon) === 'Bs' || /pago\s*m[oó]vil/i.test(c.pagadoCon)) && !(Number(c.tasa) > 0 && Number.isFinite(Number(c.tasa)))) return alert('Para pagar en bolívares debes indicar la tasa utilizada.')
     if (lineas.some((l) => !prod(l))) return alert('Elige el producto de cada línea.')
     if (lineas.some((l) => !(cantUso(l) > 0))) return alert('Escribe la cantidad de cada línea.')
-    if (lineas.some((l) => l.costo == null)) return alert('Escribe lo que pagaste por cada línea (sin delivery).')
+    if (lineas.some((l) => l.costo == null || !Number.isFinite(Number(l.costo)) || l.costo < 0))
+      return alert('Escribe un costo no negativo por cada línea (sin delivery).')
+    if (c.delivery != null && (!Number.isFinite(Number(c.delivery)) || c.delivery < 0))
+      return alert('Escribe un costo de delivery no negativo.')
     if (new Set(lineas.map((l) => Number(l.productoId))).size !== lineas.length) return alert('Hay un producto repetido: júntalo en una sola línea.')
-    await registrarCompra({
-      lineas: lineas.map((l, i) => ({ productoId: Number(l.productoId), cantidadUso: cantUso(l), costoTotal: n(l.costo) + partes[i] })),
-      fecha: c.fecha, proveedorId: c.proveedorId ? Number(c.proveedorId) : null, pagadoCon: c.pagadoCon || null, referencia: c.referencia, tasa: c.tasa, tasaDetalle: c.tasaDetalle,
-      nota: n(c.delivery) > 0 ? `Incluye delivery repartido (${usd(c.delivery)} en total)` : '',
-    })
-    onCerrar()
+    setGuardando(true)
+    try {
+      await registrarCompra({
+        lineas: lineas.map((l, i) => ({ productoId: Number(l.productoId), cantidadUso: cantUso(l), costoTotal: n(l.costo) + partes[i] })),
+        fecha: c.fecha, proveedorId: c.proveedorId ? Number(c.proveedorId) : null, pagadoCon: c.pagadoCon || null, referencia: c.referencia, tasa: c.tasa, tasaDetalle: c.tasaDetalle,
+        nota: n(c.delivery) > 0 ? `Incluye delivery repartido (${usd(c.delivery)} en total)` : '',
+      })
+      onCerrar()
+    } catch (error) {
+      alert(error.message)
+      setGuardando(false)
+    }
   }
 
   return (
@@ -340,12 +356,12 @@ function CompraForm({ productos, config, onCerrar }) {
 
       </div>
       <TasaOperacion valor={c} fecha={c.fecha} montoUsd={total}
-        opcional={!(monedaEfectivo(c.pagadoCon) === 'Bs' || /pago\s*m[oó]vil/i.test(c.pagadoCon))}
+        opcional={monedaMetodoPago(c.pagadoCon) !== 'Bs'}
         onCambio={cambios => setC(actual => ({ ...actual, ...cambios }))} />
       <p className="ayuda">Total de la compra: <strong>{usd(total)}</strong>. El delivery se suma al costo de cada material, así el costo por unidad queda completo.</p>
       <div className="modal-pie">
         <button className="sec" onClick={onCerrar}>Cancelar</button>
-        <button onClick={guardar}>Registrar compra</button>
+        <button onClick={guardar} disabled={guardando}>Registrar compra</button>
       </div>
     </Modal>
   )

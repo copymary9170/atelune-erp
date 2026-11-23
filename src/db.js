@@ -1,8 +1,9 @@
 import Dexie from 'dexie'
-import { aplicarMovimiento, calcularCotizacion, consumoPedido, faltantesDeCosto, personas } from './lib/calc.js'
+import { aplicarMovimiento, calcularCotizacion, consumoPedido, faltantesDeCosto, personas, redondear, saldoPedido } from './lib/calc.js'
 import { prepararDuplicadoCotizacion } from './lib/escalas-cotizaciones.js'
 import { calcularArqueo, resumenMovimientosCaja } from './lib/caja.js'
 import { seleccionarTasa } from './lib/tasas-multiples.js'
+import { congelarConversion, validarFechaOperacion } from './lib/pagos.js'
 
 // Base de datos local (IndexedDB, dentro del navegador).
 // Toda la lógica de datos pasa por este archivo para poder migrar
@@ -117,11 +118,14 @@ export async function tasaVigente(tipo = 'bcv_usd', fechaMax = '9999-12-31') {
 
 // ---------- Inventario ----------
 
-export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen, tasa, tasaDetalle }) {
+export async function registrarMovimiento({ productoId, tipo, cantidad, costoUnitario, fecha, referencia, nota, pedidoId, proveedorId, pagadoCon, origen, tasa, tasaDetalle, montoBs }) {
+  if (fecha != null) validarFechaOperacion(fecha)
   return db.transaction('rw', db.productos, db.movimientos, async () => {
     const p = await db.productos.get(productoId)
     if (!p) throw new Error('Producto no encontrado')
     const r = aplicarMovimiento(p, { tipo, cantidad, costoUnitario })
+    const convertido = tipo === 'entrada'
+      ? congelarConversion(Number(cantidad) * Number(costoUnitario), tasa, pagadoCon) : null
     await db.productos.update(productoId, { stock: r.stock, costoPromedio: r.costoPromedio })
     return db.movimientos.add({
       productoId,
@@ -136,6 +140,7 @@ export async function registrarMovimiento({ productoId, tipo, cantidad, costoUni
       pagadoCon: pagadoCon ?? null,
       tasa: tasa == null ? null : Number(tasa),
       tasaDetalle: tasaDetalle ? structuredClone(tasaDetalle) : null,
+      montoBs: convertido === null ? null : montoBs ?? convertido,
       origen: origen ?? null,
       stockResultante: r.stock,
       costoPromedioResultante: r.costoPromedio,
@@ -322,6 +327,25 @@ export async function guardarArqueoCaja(entrada) {
 }
 
 // ---------- Pedidos ----------
+export async function registrarAbono(pedidoId, { fecha, monto, metodo, tasa, tipoTasa, tasaDetalle, nota }) {
+  validarFechaOperacion(fecha)
+  const montoUsd = Number(monto)
+  if (!Number.isFinite(montoUsd) || montoUsd <= 0) throw new Error('Indica un monto válido.')
+  if (!metodo?.trim()) throw new Error('Selecciona el método de pago.')
+  const montoBs = congelarConversion(montoUsd, tasa, metodo)
+  return db.transaction('rw', db.pedidos, async () => {
+    const pedido = await db.pedidos.get(pedidoId)
+    if (!pedido || pedido.estado === 'cancelado') throw new Error('El pedido no está disponible para recibir pagos.')
+    const pendiente = saldoPedido(pedido)
+    const abono = {
+      fecha, monto: montoUsd, metodo, tasa, tipoTasa, tasaDetalle, nota, montoBs,
+      saldoAntes: redondear(pendiente), saldoDespues: redondear(pendiente - montoUsd),
+      registradoEn: new Date().toISOString(),
+    }
+    await db.pedidos.update(pedidoId, { abonos: [...(pedido.abonos || []), abono] })
+  })
+}
+
 export const ESTADOS_PEDIDO = {
   aprobado: 'Aprobado',
   en_diseno: 'En diseño',
@@ -462,11 +486,23 @@ export async function agregarDatos(datos) {
 // ---------- Compra de varios materiales ----------
 /** lineas: [{ productoId, cantidadUso, costoTotal }] con el delivery ya incluido en costoTotal. */
 export async function registrarCompra({ lineas, fecha, proveedorId, pagadoCon, referencia, nota, tasa, tasaDetalle }) {
+  validarFechaOperacion(fecha)
+  if (!lineas.length || lineas.some(l => l.costoTotal == null || l.costoTotal === '' ||
+      !Number.isFinite(Number(l.costoTotal)) || Number(l.costoTotal) < 0))
+    throw new Error('Indica un costo válido para cada material.')
   return db.transaction('rw', db.productos, db.movimientos, async () => {
-    for (const l of lineas)
+    // Redondear el total acumulado evita que un centavo de Bs se pierda entre renglones.
+    let acumulado = 0
+    let anteriorBs = 0
+    for (const l of lineas) {
+      acumulado += Number(l.costoTotal)
+      const acumuladoBs = congelarConversion(acumulado, tasa, pagadoCon)
       await registrarMovimiento({
         productoId: l.productoId, tipo: 'entrada', cantidad: l.cantidadUso, costoUnitario: l.costoTotal / l.cantidadUso,
         fecha, proveedorId, pagadoCon, referencia, nota, tasa, tasaDetalle,
+        montoBs: acumuladoBs == null ? null : redondear(acumuladoBs - anteriorBs),
       })
+      anteriorBs = acumuladoBs
+    }
   })
 }

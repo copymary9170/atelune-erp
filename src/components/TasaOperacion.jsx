@@ -21,15 +21,18 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
   const entidad = borrador.entidad ?? (d?.tipo === tipo ? d.entidad : '')
   const sentido = borrador.sentido ?? (d?.tipo === tipo ? d.sentido : 'compra')
   const comisionPct = borrador.comisionPct ?? (d?.tipo === tipo ? d.comisionPct : 0)
-  const tasaRegistrada = seleccionarTasa(registros || [], tipo, fecha || '9999-12-31')
+  const banco = String(entidad ?? '').trim().toLowerCase()
+  const candidatas = (registros || []).filter(r => tipo !== 'menudeo' ||
+    (banco && String(r.entidad ?? '').trim().toLowerCase() === banco && r.sentido === sentido))
+  const tasaRegistrada = fecha ? seleccionarTasa(candidatas, tipo, fecha) : null
   const tasaAutomatica = seleccionarReferenciaAutomatica(automaticas, tipo, fecha)
   const campos = {
     tasa: tasaCapturada, usdPorUnidad, entidad, sentido, comisionPct,
-    referenciaId: borrador.referenciaId ?? null,
+    referenciaId: borrador.referenciaId ?? d?.referenciaId ?? null,
     fechaReferencia: borrador.fechaReferencia ?? d?.fecha ?? null,
     horaReferencia: borrador.horaReferencia ?? d?.hora ?? null,
-    procedencia: borrador.procedencia ?? (d?.referenciaAutomaticaId != null ? {
-      fuenteExterna: d.fuenteExterna, urlFuente: d.urlFuente,
+    procedencia: borrador.procedencia ?? (d?.fuente || d?.fuenteExterna ? {
+      fuente: d.fuente, origen: d.origen, fuenteExterna: d.fuenteExterna, urlFuente: d.urlFuente,
       referenciaAutomaticaId: d.referenciaAutomaticaId,
     } : null),
   }
@@ -39,8 +42,9 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
   }
   function actualizarCampo(campo, v) {
     const siguiente = { ...campos, [campo]: v }
-    // Si se cambia la tasa Bs original ya no se debe atribuir a la referencia.
-    if (campo === 'tasa') {
+    const cambiaMenudeo = tipo === 'menudeo' && (campo === 'entidad' || campo === 'sentido')
+    if (campo === 'tasa' || cambiaMenudeo) {
+      if (cambiaMenudeo) siguiente.tasa = ''
       siguiente.referenciaId = null
       siguiente.fechaReferencia = null
       siguiente.horaReferencia = null
@@ -55,7 +59,7 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
         hora: siguiente.horaReferencia,
         referenciaId: siguiente.referenciaId,
       })
-      if (siguiente.procedencia) detalle = { ...detalle, ...siguiente.procedencia }
+      detalle = { ...detalle, ...(siguiente.procedencia || { origen: 'manual' }) }
     } catch {}
     onCambio({ tipoTasa: tipo, tasa: detalle?.efectivaBsPorUsd ?? null,
       tasaDetalle: detalle, tasaBorrador: siguiente })
@@ -92,6 +96,7 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
       referenciaId: tasaRegistrada.id,
       fechaReferencia: tasaRegistrada.fecha,
       horaReferencia: tasaRegistrada.hora || null,
+      procedencia: { fuente: tasaRegistrada.fuente, origen: tasaRegistrada.origen, urlFuente: tasaRegistrada.enlace },
     }
     try {
       const detalle = crearDetalleTasa({
@@ -101,7 +106,7 @@ export default function TasaOperacion({ valor, onCambio, fecha, montoUsd, opcion
         referenciaId: tasaRegistrada.id,
       })
       onCambio({ tipoTasa: tipo, tasa: detalle.efectivaBsPorUsd,
-        tasaDetalle: detalle, tasaBorrador: {} })
+        tasaDetalle: { ...detalle, ...elegidos.procedencia }, tasaBorrador: elegidos })
     } catch {
       // Si la referencia EUR/USDT aún no tiene equivalencia USD, copiar
       // la tasa observada y pedir que se complete SIN inventar una paridad.
