@@ -1,4 +1,5 @@
 import { descuentoPorCantidad } from './escalas-cotizaciones.js'
+import { fechaContable } from './format.js'
 
 // Cálculos puros (sin base de datos), probados en calc.test.js.
 // Todos los montos están en dólares (USD). Los bolívares se obtienen con la tasa del día.
@@ -44,9 +45,11 @@ export function depreciacionMensual(a) {
 
 export function mesesTranscurridos(desde, hasta = new Date()) {
   if (!desde) return 0
-  const d = new Date(desde + 'T00:00:00')
-  const m = (hasta.getFullYear() - d.getFullYear()) * 12 + (hasta.getMonth() - d.getMonth())
-  return Math.max(0, m)
+  const corte = fechaContable(hasta)
+  if (!corte) return 0
+  const [anio, mes] = desde.split('-').map(Number)
+  const [anioCorte, mesCorte] = corte.split('-').map(Number)
+  return Math.max(0, (anioCorte - anio) * 12 + mesCorte - mes)
 }
 
 export function depreciacionAcumulada(a, hasta = new Date()) {

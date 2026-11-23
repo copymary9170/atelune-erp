@@ -111,7 +111,10 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
       if (!confirmado) throw new Error('La copia remota cambió repetidamente; no se pudo confirmar el guardado. Conserva el respaldo local y vuelve a sincronizar.')
       estado(meta.get().sucio ? 'sincronizando' : 'ok', meta.get())
     } catch (e) {
-      if (activo) estado(esErrorDeRed(e) ? 'sin_conexion' : 'error', e)
+      if (activo && e?.code === '23514') {
+        conflicto = { financiero: true }
+        estado('conflicto', conflicto)
+      } else if (activo) estado(esErrorDeRed(e) ? 'sin_conexion' : 'error', e)
     } finally {
       ocupado = false
       if (activo && (repetir || (meta.get().sucio && !conflicto))) {
@@ -136,6 +139,7 @@ export function crearSincronizador({ remoto, local, meta, alEstado = () => {} })
       asegurarActivo()
       const r = conflicto
       if (!r) return
+      if (r.financiero) throw new Error('Los abonos deben conciliarse antes de reemplazar datos.')
       if (eleccion === 'nube') {
         const marcaEleccion = cambios
         // El conflicto mostrado puede haberse quedado desactualizado mientras la

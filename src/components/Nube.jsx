@@ -70,8 +70,10 @@ export function ConflictoNube() {
   }
   return (
     <Modal titulo="¿Qué datos conservo?" onCerrar={() => {}}>
-      <p>Este dispositivo y la nube tienen cambios distintos. Elige cuál conservar; el otro se reemplaza.</p>
-      <p className="desglose">En la nube: {n('clientes')} clientes · {n('pedidos')} pedidos · {n('cotizaciones')} cotizaciones · {n('productos')} productos · {n('gastos')} gastos.</p>
+      {detalle?.financiero ? <p>La copia de este dispositivo cambia abonos de la nube. Descarga un respaldo y concilia los cobros antes de continuar.</p> : <>
+        <p>Este dispositivo y la nube tienen cambios distintos. Revisa las diferencias antes de elegir una copia.</p>
+        <p className="desglose">En la nube: {n('clientes')} clientes · {n('pedidos')} pedidos · {n('cotizaciones')} cotizaciones · {n('productos')} productos · {n('gastos')} gastos.</p>
+      </>}
       <p className="ayuda">Si no estás segura, descarga primero un respaldo de este dispositivo:</p>
       <button className="sec mini" onClick={async () => {
         const datos = await exportarDatos()
@@ -80,10 +82,10 @@ export function ConflictoNube() {
         a.download = `atelune-respaldo-dispositivo-${datos.fecha.slice(0, 10)}.json`
         a.click()
       }}>Descargar respaldo de este dispositivo</button>
-      <div className="modal-pie">
+      {!detalle?.financiero && <div className="modal-pie">
         <button className="sec" disabled={ocupado} onClick={() => elegir('local')}>Conservar este dispositivo</button>
         <button disabled={ocupado} onClick={() => elegir('nube')}>Usar lo de la nube</button>
-      </div>
+      </div>}
     </Modal>
   )
 }
