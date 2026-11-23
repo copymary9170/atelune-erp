@@ -124,7 +124,4 @@ export default function ItemEditor({ item, onCambio, productos, activos, config,
   )
 }
 
-export const itemVacio = () => ({
-  descripcion: '', lineaId: '', cantidad: 1, materiales: [], maquinas: [],
-  minutosDiseno: null, minutosProduccion: null, mermaPct: null, extras: [], margenPct: null, descuentoPct: null, escalasCantidad: [],
-})
+export { itemVacio } from '../lib/cotizaciones.js'

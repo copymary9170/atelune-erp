@@ -4,6 +4,7 @@ import { prepararDuplicadoCotizacion } from './lib/escalas-cotizaciones.js'
 import { calcularArqueo, resumenMovimientosCaja } from './lib/caja.js'
 import { seleccionarTasa } from './lib/tasas-multiples.js'
 import { congelarConversion, validarFechaOperacion } from './lib/pagos.js'
+import { borradorCotizacion, calcularCotizacionRapida } from './lib/cotizaciones.js'
 
 // Base de datos local (IndexedDB, dentro del navegador).
 // Toda la lógica de datos pasa por este archivo para poder migrar
@@ -290,13 +291,39 @@ export async function importarRespaldo(datos, { destino = db } = {}) {
   })
 }
 
+async function siguienteNumeroCotizacion() {
+  const ultima = await db.cotizaciones.orderBy('numero').last()
+  return Math.max(0, Number(ultima?.numero) || 0) + 1
+}
+
+export async function nuevaCotizacion() {
+  return db.transaction('rw', db.cotizaciones, async () =>
+    db.cotizaciones.add({ ...borradorCotizacion(), numero: await siguienteNumeroCotizacion() }))
+}
+
+export async function datosCotizacion() {
+  const [productos, activos, config] = await Promise.all([db.productos.toArray(), db.activos.toArray(), getConfig()])
+  return { productos, activos, config }
+}
+
+export async function guardarCotizacionRapida(plantillaId, cantidad, precioVisto) {
+  return db.transaction('rw', [db.cotizaciones, db.plantillas, db.productos, db.activos, db.config], async () => {
+    const plantilla = await db.plantillas.get(plantillaId)
+    if (!plantilla) throw new Error('La plantilla ya no está disponible.')
+    const { cotizacion, avisos } = calcularCotizacionRapida(plantilla, cantidad, await datosCotizacion())
+    if (!cotizacion) throw new Error(avisos.join(' '))
+    if (cotizacion.calculo.total !== precioVisto)
+      throw new Error('El precio cambió. Revisa el nuevo total antes de guardar.')
+    return db.cotizaciones.add({ ...cotizacion, numero: await siguienteNumeroCotizacion() })
+  })
+}
+
 // Crea una nueva cotización sin alterar el original ni su pedido asociado.
 export async function duplicarCotizacion(id) {
   return db.transaction('rw', db.cotizaciones, async () => {
     const origen = await db.cotizaciones.get(Number(id))
     if (!origen) throw new Error('Cotización original no encontrada.')
-    const ultima = await db.cotizaciones.orderBy('numero').last()
-    const numero = Math.max(0, Number(ultima?.numero) || 0) + 1
+    const numero = await siguienteNumeroCotizacion()
     const fecha = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
     return db.cotizaciones.add(prepararDuplicadoCotizacion(origen, numero, fecha))
   })

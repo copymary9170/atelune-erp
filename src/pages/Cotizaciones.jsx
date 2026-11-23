@@ -1,25 +1,16 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, duplicarCotizacion } from '../db.js'
+import { db, duplicarCotizacion, nuevaCotizacion } from '../db.js'
 import { Campo, Selector } from '../components/ui.jsx'
-import { usd, bs, fecha, hoy } from '../lib/format.js'
+import CotizacionRapida from '../components/CotizacionRapida.jsx'
+import { usd, bs, fecha } from '../lib/format.js'
 
 export const ESTADOS = {
   borrador: 'Borrador',
   enviada: 'Enviada',
   aprobada: 'Aprobada',
   rechazada: 'Rechazada',
-}
-
-export async function nuevaCotizacion() {
-  const ultima = await db.cotizaciones.orderBy('numero').last()
-  const numero = (ultima?.numero ?? 0) + 1
-  return db.cotizaciones.add({
-    numero, fecha: hoy(), estado: 'borrador', cliente: '', contactoCliente: '',
-    items: [], envio: null, metodoPagoIdx: 0, aplicarIva: false,
-    tasa: null, tipoTasa: 'bcv_usd', tasaDetalle: null, notas: '', calculo: null,
-  })
 }
 
 export const codigo = (num) => 'COT-' + String(num).padStart(4, '0')
@@ -31,6 +22,7 @@ export default function Cotizaciones() {
   const [estado, setEstado] = useState('')
   const [duplicando, setDuplicando] = useState(null)
   const [error, setError] = useState('')
+  const [rapida, setRapida] = useState(false)
   const lista = cots.filter(
     (c) => (!estado || c.estado === estado) && (!buscar || (codigo(c.numero) + ' ' + c.cliente).toLowerCase().includes(buscar.toLowerCase())),
   )
@@ -56,8 +48,12 @@ export default function Cotizaciones() {
           <h1>Cotizaciones</h1>
           <p>Calcula el precio de cualquier trabajo con tus costos reales.</p>
         </div>
-        <button onClick={async () => navigate('/cotizaciones/' + (await nuevaCotizacion()))}>+ Nueva cotización</button>
+        <div className="acciones">
+          <button className="sec" onClick={async () => navigate('/cotizaciones/' + (await nuevaCotizacion()))}>+ Nueva cotización</button>
+          <button onClick={() => setRapida(true)}>Cotización rápida</button>
+        </div>
       </div>
+      {rapida && <CotizacionRapida onCerrar={() => setRapida(false)} />}
       {error && <p className="pendiente" role="alert">{error}</p>}
       <div className="tarjeta">
         <div className="fila">
