@@ -75,3 +75,45 @@ test('auth de Supabase y respuesta bancaria filtrada sin exponer credenciales',a
     assert.ok(!JSON.stringify(res.cuerpo).includes('clave-ficticia-no-real'))
   }finally{globalThis.fetch=fetchOriginal;restaurar()}
 })
+
+test('cuenta con MFA no consulta al proveedor con contraseña sola ni JWT malformado',async()=>{
+  const fetchOriginal=globalThis.fetch
+  try {
+    process.env.REFERENCIASVE_API_KEY='clave-ficticia-no-real'
+    process.env.SUPABASE_URL='https://ejemplo.supabase.co'
+    process.env.SUPABASE_ANON_KEY='anon-ficticio'
+    let proveedores=0
+    globalThis.fetch=async url=>{
+      if(url.endsWith('/auth/v1/user')) return {ok:true,json:async()=>({id:'uid-ficticio',factors:[{status:'verified',factor_type:'totp'}]})}
+      proveedores++
+      return {ok:true,json:async()=>[]}
+    }
+    const token=aal=>`prueba.${Buffer.from(JSON.stringify({aal})).toString('base64url')}.firma`
+    for(const jwt of [token('aal1'),'token.mal.formado']) {
+      const res=resFicticia()
+      await handler({method:'GET',headers:{authorization:'Bearer '+jwt}},res)
+      assert.equal(res.codigo,403)
+    }
+    assert.equal(proveedores,0)
+    const res=resFicticia()
+    await handler({method:'GET',headers:{authorization:'Bearer '+token('aal2')}},res)
+    assert.equal(res.codigo,200)
+    assert.equal(proveedores,1)
+  } finally {globalThis.fetch=fetchOriginal;restaurar()}
+})
+
+test('un JWT AAL2 que Supabase rechaza nunca autoriza la API bancaria',async()=>{
+  const fetchOriginal=globalThis.fetch
+  try {
+    process.env.REFERENCIASVE_API_KEY='clave-ficticia-no-real'
+    process.env.SUPABASE_URL='https://ejemplo.supabase.co'
+    process.env.SUPABASE_ANON_KEY='anon-ficticio'
+    let llamadas=0
+    globalThis.fetch=async()=>{llamadas++;return {ok:false}}
+    const res=resFicticia()
+    const payload=Buffer.from(JSON.stringify({aal:'aal2'})).toString('base64url')
+    await handler({method:'GET',headers:{authorization:`Bearer falsa.${payload}.firma`}},res)
+    assert.equal(res.codigo,401)
+    assert.equal(llamadas,1)
+  }finally{globalThis.fetch=fetchOriginal;restaurar()}
+})

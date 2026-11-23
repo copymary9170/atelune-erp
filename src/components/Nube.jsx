@@ -12,9 +12,12 @@ export function Acceso() {
   async function entrar(e) {
     e.preventDefault()
     setCargando(true); setError('')
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: clave })
-    setCargando(false)
-    if (error) setError(/invalid/i.test(error.message) ? 'Correo o contraseña incorrectos.' : 'No se pudo entrar: ' + error.message)
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: clave })
+      if (error) setError(/invalid/i.test(error.message) ? 'Correo o contraseña incorrectos.' : 'No se pudo entrar. Revisa tu conexión y vuelve a intentarlo.')
+      else setClave('')
+    } catch { setError('No se pudo entrar. Revisa tu conexión y vuelve a intentarlo.') }
+    finally { setCargando(false) }
   }
 
   return (
@@ -25,7 +28,7 @@ export function Acceso() {
         <div className="campo"><label>Contraseña</label><input type="password" value={clave} onChange={(e) => setClave(e.target.value)} autoComplete="current-password" required /></div>
         {error && <p className="pendiente">{error}</p>}
         <button type="submit" disabled={cargando} style={{ width: '100%', justifyContent: 'center' }}>{cargando ? 'Entrando…' : 'Entrar'}</button>
-        <p className="ayuda" style={{ marginTop: 12 }}>Después del primer ingreso, la app funciona aunque se vaya el internet y guarda en la nube al volver.</p>
+        <p className="ayuda" style={{ marginTop: 12 }}>Si activaste la verificación en dos pasos, te pediremos el código de tu aplicación autenticadora después de la contraseña. Necesitas internet para verificar el acceso.</p>
       </form>
     </div>
   )
