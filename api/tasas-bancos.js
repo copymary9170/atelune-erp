@@ -30,6 +30,12 @@ export default async function handler(req, res) {
     if (!auth.ok) return res.status(401).json({ error: 'Sesión no válida; inicia sesión nuevamente.' })
     const user = await auth.json()
     if (!user?.id) return res.status(401).json({ error: 'No se pudo autenticar el usuario.' })
+    // El JWT ya fue verificado por Auth: leer AAL solo después de esa validación.
+    if (user.factors?.some(f => f.status === 'verified')) {
+      let aal
+      try { aal = JSON.parse(Buffer.from(bearer.slice(7).split('.')[1], 'base64url').toString()).aal } catch { /* denegar */ }
+      if (aal !== 'aal2') return res.status(403).json({ error: 'Completa la verificación en dos pasos para consultar bancos.' })
+    }
     const remote = await fetch('https://api.referenciasve.com/rates/banks?currency=USD', {
       headers: { 'x-api-key': key, Accept: 'application/json' },
       signal: ctrl.signal, redirect: 'error',

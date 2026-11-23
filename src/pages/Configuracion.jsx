@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import PerfilesTinta from '../components/PerfilesTinta.jsx'
+import Seguridad from '../components/Seguridad.jsx'
 import { db, exportarRespaldo, importarRespaldo, agregarDatos, reglaGeneral } from '../db.js'
 import { Campo, useConfig } from '../components/ui.jsx'
 import { totalCostosFijos, fijosPorPedido, personas as listaPersonas, validarRegla } from '../lib/calc.js'
@@ -230,6 +231,7 @@ export default function Configuracion() {
       </div>
 
       <NubeTarjeta />
+      {nubeConfigurada && <Seguridad />}
 
       <div className="tarjeta">
         <h2>Respaldo de datos</h2>

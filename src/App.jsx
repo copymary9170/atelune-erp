@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { nubeConfigurada, useSesion, iniciarNube, detenerNube, supabase, reiniciarMetaCuenta } from './nube.js'
 import { prepararBaseCuenta } from './db.js'
 import { Acceso, IndicadorNube, ConflictoNube } from './components/Nube.jsx'
+import { SegundoPaso, useSegundoPaso } from './components/Seguridad.jsx'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { Logo, Marca } from './components/ui.jsx'
 import Inicio from './pages/Inicio.jsx'
@@ -51,16 +52,18 @@ const TABBAR = ['/', '/cotizaciones', '/pedidos', '/inventario']
 
 export default function App() {
   const sesion = useSesion()
+  const segundoPaso = useSegundoPaso(sesion)
+  const accesoVerificado = segundoPaso.fase === 'permitida'
   const uid = sesion?.user?.id
   const uidActual = useRef(uid)
-  uidActual.current = uid
+  uidActual.current = accesoVerificado ? uid : null
   const [cuentaLocal, setCuentaLocal] = useState({ uid: null, fase: 'comprobando', detalle: '' })
 
   useEffect(() => {
     detenerNube()
     let vigente = true
     setCuentaLocal({ uid, fase: 'comprobando', detalle: '' })
-    if (!nubeConfigurada || !uid) return () => { vigente = false; detenerNube() }
+    if (!nubeConfigurada || !uid || !accesoVerificado) return () => { vigente = false; detenerNube() }
 
     async function comprobar() {
       try {
@@ -79,7 +82,7 @@ export default function App() {
     }
     comprobar()
     return () => { vigente = false; detenerNube() }
-  }, [uid])
+  }, [uid, accesoVerificado])
 
   async function confirmarPropiedad() {
     const uidConfirmada = uid
@@ -101,6 +104,7 @@ export default function App() {
 
   if (nubeConfigurada && sesion === undefined) return <p className="muted" style={{ padding: 30 }}>Cargando…</p>
   if (nubeConfigurada && !sesion) return <Acceso />
+  if (nubeConfigurada && !accesoVerificado) return <SegundoPaso estado={segundoPaso} />
   if (nubeConfigurada && (cuentaLocal.uid !== uid || cuentaLocal.fase === 'comprobando'))
     return <p className="muted" style={{ padding: 30 }}>Preparando la base independiente de esta cuenta…</p>
   if (nubeConfigurada && cuentaLocal.fase !== 'permitida') return (
