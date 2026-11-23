@@ -8,6 +8,8 @@ La migración `verificacion_dos_pasos.sql` añade políticas restrictivas para l
 
 El build de producción de Vercel ejecuta `tools/aplicar-mfa.mjs` después de compilar, usando la conexión PostgreSQL ya configurada. Si la migración falla, el build falla y no se publica la nueva versión. No se usa la conexión en builds locales ni de vista previa. La migración se puede ejecutar directamente desde SQL Editor después de `esquema.sql`. Si en el futuro se añaden las tablas opcionales de cobros o tasas, se debe ejecutar de nuevo para protegerlas.
 
+La conexión verifica TLS con las autoridades estándar de Node y la CA oficial de Supabase, `prod-ca-2021.crt`, descargada de `https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt`. La validación del certificado y del nombre del servidor permanece habilitada.
+
 ## Recuperación
 
 Se recomienda añadir un autenticador de respaldo en otro dispositivo. Si se pierden todos, la propietaria del proyecto Supabase debe verificar la identidad de la persona antes de retirar su factor desde la administración. Restablecer la contraseña no elimina MFA. No hay un acceso alternativo que omita el código desde Atelune.

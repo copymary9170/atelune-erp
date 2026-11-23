@@ -1,14 +1,21 @@
 // Migración idempotente durante el build de producción de Vercel.
 // La conexión ya configurada se usa en el servidor y nunca se escribe ni imprime.
 import { readFile } from 'node:fs/promises'
+import { rootCertificates } from 'node:tls'
 import pg from 'pg'
 import { verificarMfa } from './verificar-mfa.mjs'
 
 if (process.env.VERCEL_ENV === 'production') {
   const connectionString = process.env.SUPABASE_POSTGRES_URL || process.env.SUPABASE_POSTGRES_URL_NON_POOLING
   if (!connectionString) throw new Error('Falta la conexión a Supabase para aplicar la protección de dos pasos.')
-  const client = new pg.Client({ connectionString, connectionTimeoutMillis: 15000, query_timeout: 30000 })
+  let client
   try {
+    const url = new URL(connectionString)
+    // pg da prioridad a sslmode sobre la opción ssl. Usar la CA oficial y
+    // mantener la validación tanto de la cadena como del nombre del servidor.
+    for (const key of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey', 'uselibpqcompat']) url.searchParams.delete(key)
+    const ca = await readFile(new URL('../supabase/prod-ca-2021.crt', import.meta.url), 'utf8')
+    client = new pg.Client({ connectionString: url.toString(), ssl: { ca: [...rootCertificates, ca], rejectUnauthorized: true }, connectionTimeoutMillis: 15000, query_timeout: 30000 })
     await client.connect()
     await client.query(await readFile(new URL('../supabase/verificacion_dos_pasos.sql', import.meta.url), 'utf8'))
     await verificarMfa(client)
@@ -18,5 +25,5 @@ if (process.env.VERCEL_ENV === 'production') {
     // Los errores de conexión pueden incluir credenciales: mensaje deliberadamente fijo.
     console.error('No se pudo aplicar o comprobar la protección MFA en Supabase; el despliegue se detuvo.', /^[A-Z0-9_]+$/.test(error.code || '') ? error.code : '')
     process.exitCode = 1
-  } finally { await client.end().catch(() => {}) }
+  } finally { await client?.end().catch(() => {}) }
 }
