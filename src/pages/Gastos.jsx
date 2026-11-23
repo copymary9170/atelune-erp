@@ -7,6 +7,7 @@ import TasaOperacion from '../components/TasaOperacion.jsx'
 import { n, personas } from '../lib/calc.js'
 import { usd, bs, fecha, hoy } from '../lib/format.js'
 import { TIPOS_TASA } from '../lib/tasas-multiples.js'
+import { congelarConversion, equivalenteBs, monedaMetodoPago, validarFechaOperacion } from '../lib/pagos.js'
 
 export const TIPOS_GASTO = {
   gasto: 'Gasto del negocio',
@@ -88,7 +89,9 @@ export default function Gastos() {
                 <td><span className="etiqueta-tipo">{TIPOS_GASTO[g.tipo]}</span></td>
                 <td>{g.tipo === 'gasto' && <strong>{g.categoria}</strong>}{g.personaNombre && <strong>{g.personaNombre}</strong>} {g.descripcion}{g.proveedorId ? <div className="desglose">{nombreProv(g.proveedorId)}</div> : null}</td>
                 <td>{g.pagadoCon === 'credito' ? <span className="pendiente">a crédito</span> : g.pagadoCon || 'aporte propio'}</td>
-                <td className="num">{usd(g.monto)}{n(g.tasa) > 0 && <div className="desglose">{bs(n(g.monto) * n(g.tasa))}{g.tasaDetalle?.tipo ? ' · ' + (TIPOS_TASA[g.tasaDetalle.tipo]?.nombre || g.tasaDetalle.tipo) : ' · tasa histórica'}</div>}</td>
+                <td className="num">{usd(g.monto)}{n(g.tasa) > 0 && <div className="desglose">
+                  {bs(g.montoBs ?? equivalenteBs(g.monto, g.tasa))}{' · ' + (TIPOS_TASA[g.tasaDetalle?.tipo]?.nombre || 'Tasa histórica')}
+                </div>}</td>
               </tr>
             ))}
             {!delMes.length && <tr><td colSpan={5} className="vacio">No hay registros en este período.</td></tr>}
@@ -103,6 +106,7 @@ export default function Gastos() {
 
 export function GastoForm({ inicial, config, proveedores, onCerrar }) {
   const [g, setG] = useState(inicial)
+  const [guardando, setGuardando] = useState(false)
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }))
   const nuevo = !inicial.id
   const metodos = config.metodosPago || []
@@ -112,8 +116,6 @@ export function GastoForm({ inicial, config, proveedores, onCerrar }) {
 
   async function guardar() {
     if (!(n(g.monto) > 0)) return alert('Escribe el monto en $.')
-    if (!g.fecha) return alert('Escribe la fecha.')
-    if (/efectivo\s*(?:bs|bol[ií]vares)|pago\s*m[oó]vil/i.test(g.pagadoCon || '') && !(Number(g.tasa) > 0)) return alert('Para una operación en bolívares debes indicar una tasa válida.')
     if (g.tipo !== 'gasto' && (!g.pagadoCon || g.pagadoCon === 'credito')) return alert('Elige con qué método se pagó.')
     if (g.tipo === 'pago_proveedor' && !g.proveedorId) return alert('Elige el proveedor.')
     if (aPersona && !g.personaId) return alert('Elige la persona.')
@@ -126,8 +128,17 @@ export function GastoForm({ inicial, config, proveedores, onCerrar }) {
       pedidoId: aPersona && g.pedidoId ? Number(g.pedidoId) : null,
     }
     if (datos.tipo !== 'gasto') delete datos.categoria
-    await db.gastos.put(datos)
-    onCerrar()
+    setGuardando(true)
+    try {
+      validarFechaOperacion(g.fecha)
+      if (nuevo || g.monto !== inicial.monto || g.tasa !== inicial.tasa || g.pagadoCon !== inicial.pagadoCon)
+        datos.montoBs = congelarConversion(g.monto, g.tasa, g.pagadoCon)
+      await db.gastos.put(datos)
+      onCerrar()
+    } catch (error) {
+      alert(error.message)
+      setGuardando(false)
+    }
   }
 
   return (
@@ -157,7 +168,7 @@ export function GastoForm({ inicial, config, proveedores, onCerrar }) {
 
       </div>
       <TasaOperacion valor={g} fecha={g.fecha} montoUsd={g.monto}
-        opcional={!/efectivo\s*(?:bs|bol[ií]var(?:es)?)|pago\s*m[oó]vil/i.test(g.pagadoCon || '')}
+        opcional={monedaMetodoPago(g.pagadoCon) !== 'Bs'}
         onCambio={cambios => setG(actual => ({ ...actual, ...cambios }))} />
       {g.tipo === 'gasto'
         ? <SelectorPago valor={g.pagadoCon ?? ''} onCambio={(v) => set('pagadoCon', v)} metodos={metodos} />
@@ -169,7 +180,7 @@ export function GastoForm({ inicial, config, proveedores, onCerrar }) {
             onClick={async () => { if (confirm('¿Eliminar este registro?')) { await db.gastos.delete(g.id); onCerrar() } }}>Eliminar</button>
         )}
         <button className="sec" onClick={onCerrar}>Cancelar</button>
-        <button onClick={guardar}>Guardar</button>
+        <button onClick={guardar} disabled={guardando}>Guardar</button>
       </div>
     </Modal>
   )

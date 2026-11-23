@@ -11,6 +11,7 @@ import { useDatosCalculo } from './Plantillas.jsx'
 import { ESTADOS, codigo } from './Cotizaciones.jsx'
 import { calcularCotizacion, avisosCotizacion, faltantesDeCosto } from '../lib/calc.js'
 import { usd, bs, pct, num } from '../lib/format.js'
+import { TIPOS_TASA } from '../lib/tasas-multiples.js'
 
 // Guarda una copia de los números para la lista y el documento impreso.
 export function resumenCalculo(r) {
@@ -30,6 +31,7 @@ export default function CotizacionEditor() {
   const clientes = useLiveQuery(() => db.clientes.orderBy('nombre').toArray(), [], [])
   const pedido = useLiveQuery(() => db.pedidos.where('cotizacionId').equals(Number(id)).first(), [id])
   const [c, setC] = useState(null)
+  const etiquetaTasa = TIPOS_TASA[c?.tasaDetalle?.tipo]?.nombre
   const [abierto, setAbierto] = useState(0)
   const [aviso, setAviso] = useState('')
 
@@ -221,7 +223,7 @@ export default function CotizacionEditor() {
               {r.comision > 0 && <tr><td>Comisión método de pago</td><td className="num">{usd(r.comision)}</td></tr>}
               {r.iva > 0 && <tr><td>IVA</td><td className="num">{usd(r.iva)}</td></tr>}
               <tr className="total"><td>Total</td><td className="num">{usd(r.total)}</td></tr>
-              <tr><td>Total en bolívares {c.tasaDetalle?.tipo ? '(' + c.tasaDetalle.tipo + ')' : ''}</td><td className="num">{r.totalBs != null ? bs(r.totalBs) : <span className="pendiente">falta tasa</span>}</td></tr>
+              <tr><td>Total en bolívares {etiquetaTasa ? '(' + etiquetaTasa + ')' : ''}</td><td className="num">{r.totalBs != null ? bs(r.totalBs) : <span className="pendiente">falta tasa</span>}</td></tr>
             </tbody>
           </table>
           <hr style={{ border: 0, borderTop: '1px solid var(--linea)', margin: '14px 0' }} />

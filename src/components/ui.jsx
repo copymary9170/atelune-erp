@@ -46,12 +46,14 @@ export function Modal({ titulo, onCerrar, children, ancho }) {
 
 // Campo de texto/número con etiqueta. Los números vacíos se guardan como null (dato pendiente).
 export function Campo({ label, ayuda, valor, onCambio, tipo = 'text', className = '', ...rest }) {
+  const id = useId()
+  const inputId = rest.id ?? id
   const v = valor ?? ''
   return (
     <div className={'campo ' + className}>
-      {label && <label>{label}</label>}
+      {label && <label htmlFor={inputId}>{label}</label>}
       {tipo === 'textarea' ? (
-        <textarea value={v} onChange={(e) => onCambio(e.target.value)} {...rest} />
+        <textarea value={v} onChange={(e) => onCambio(e.target.value)} {...rest} id={inputId} />
       ) : (
         <input
           type={tipo}
@@ -59,6 +61,7 @@ export function Campo({ label, ayuda, valor, onCambio, tipo = 'text', className 
           step={tipo === 'number' ? 'any' : undefined}
           onChange={(e) => onCambio(tipo === 'number' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value)}
           {...rest}
+          id={inputId}
         />
       )}
       {ayuda && <div className="ayuda">{ayuda}</div>}
@@ -67,10 +70,11 @@ export function Campo({ label, ayuda, valor, onCambio, tipo = 'text', className 
 }
 
 export function Selector({ label, valor, onCambio, opciones, vacio, className = '' }) {
+  const id = useId()
   return (
     <div className={'campo ' + className}>
-      {label && <label>{label}</label>}
-      <select value={valor ?? ''} onChange={(e) => onCambio(e.target.value)}>
+      {label && <label htmlFor={id}>{label}</label>}
+      <select id={id} value={valor ?? ''} onChange={(e) => onCambio(e.target.value)}>
         {vacio !== undefined && <option value="">{vacio}</option>}
         {opciones.map((o) => (
           <option key={o.value} value={o.value}>

@@ -1,12 +1,12 @@
 // Libro auxiliar de efectivo para arqueo. No genera asientos contables,
 // no modifica pedidos/gastos y no convierte fondos entre USD y Bs.
+import { equivalenteBs, monedaMetodoPago } from './pagos.js'
+
 const red = x => Math.round((x + Number.EPSILON) * 100) / 100
 const valido = x => x !== '' && x != null && Number.isFinite(Number(x)) && Number(x) >= 0
 export function monedaEfectivo(metodo) {
   if (!/efectivo/i.test(String(metodo || ''))) return null
-  if (/\b(bs\.?|ves|bol[ií]var(?:es)?)\b/i.test(metodo)) return 'Bs'
-  if (/\$|usd|d[oó]lar(?:es)?/i.test(metodo)) return 'USD'
-  return null // No adivinar la moneda de un método ambiguo
+  return monedaMetodoPago(metodo)
 }
 export function metodosEfectivo(config) {
   return [...new Set((config?.metodosPago || []).map(x => x.nombre).filter(x => monedaEfectivo(x)))]
@@ -16,35 +16,41 @@ export function resumenMovimientosCaja({ pedidos = [], gastos = [], movimientos 
   const moneda = monedaEfectivo(metodo)
   if (!moneda) throw new Error('El método no identifica una moneda de efectivo.')
   const registros = []
-  const convertir = (monto, tasa, origen, id, signo, detalle) => {
+  const convertir = (monto, operacion, origen, id, signo, detalle) => {
     const usd = Number(monto)
     if (monto == null || monto === '' || !Number.isFinite(usd) || usd < 0) {
       registros.push({ origen, id, detalle, estado: 'importe_invalido', signo, importe: null })
       return
     }
-    if (moneda === 'Bs' && (!Number.isFinite(Number(tasa)) || Number(tasa) <= 0)) {
+    const importe = moneda === 'Bs'
+      ? operacion.montoBs ?? equivalenteBs(monto, operacion.tasa) : red(usd)
+    if (moneda === 'Bs' && importe == null) {
       registros.push({ origen, id, detalle, estado: 'sin_tasa', signo, importe: null })
       return
     }
-    const importe = moneda === 'Bs' ? red(usd * Number(tasa)) : red(usd)
-    registros.push({ origen, id, detalle, estado: 'ok', signo, importe })
+    if (!valido(importe)) {
+      registros.push({ origen, id, detalle, estado: 'importe_invalido', signo, importe: null })
+      return
+    }
+    registros.push({ origen, id, detalle, estado: 'ok', signo, importe: Number(importe) })
   }
   for (const p of pedidos) for (const [indice, a] of (p.abonos || []).entries()) {
     if (a.anulado || a.fecha !== fecha || a.metodo !== metodo) continue
-    convertir(a.monto, a.tasa, 'pago', String(p.id) + ':' + indice, 1, 'Abono ' + (p.numero ?? p.id))
+    convertir(a.monto, a, 'pago', String(p.id) + ':' + indice, 1, 'Abono ' + (p.numero ?? p.id))
   }
   for (const g of gastos) {
     if (g.fecha !== fecha || g.pagadoCon !== metodo || g.pagadoCon === 'credito') continue
-    if (g.tipo === 'aporte') convertir(g.monto, g.tasa, 'gasto', g.id, 1, 'Aporte de capital')
+    if (g.tipo === 'aporte') convertir(g.monto, g, 'gasto', g.id, 1, 'Aporte de capital')
     else if (['gasto', 'pago_proveedor', 'pago_mano_obra', 'reparto', 'retiro'].includes(g.tipo)) {
-      convertir(g.monto, g.tasa, 'gasto', g.id, -1, g.descripcion || g.tipo)
+      convertir(g.monto, g, 'gasto', g.id, -1, g.descripcion || g.tipo)
     }
   }
   for (const m of movimientos) {
     if (m.fecha !== fecha || m.pagadoCon !== metodo || m.tipo !== 'entrada') continue
     // Compras: cada movimiento contiene el costo total de su renglón,
     // incluyendo el delivery ya distribuido. No volver a sumar el delivery.
-    convertir(Number(m.cantidad) * Number(m.costoUnitario), m.tasa, 'compra', m.id, -1, m.referencia || 'Compra de inventario')
+    const costo = valido(m.cantidad) && valido(m.costoUnitario) ? Number(m.cantidad) * Number(m.costoUnitario) : null
+    convertir(costo, m, 'compra', m.id, -1, m.referencia || 'Compra de inventario')
   }
   const pendientes = registros.filter(r => r.estado !== 'ok')
   const entradas = red(registros.filter(r => r.estado === 'ok' && r.signo === 1).reduce((s, r) => s + r.importe, 0))
